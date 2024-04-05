@@ -4,9 +4,7 @@ Real-time rendering playground using C++ and Vulkan.
 ## Description
 ![screenshot](assets/screenshot.png)
 
-
-
-## Setup
+## Steps
 ### 1. Create docker image
 ```shell
 sh docker/build.sh
