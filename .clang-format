@@ -1,0 +1,8 @@
+BasedOnStyle: google
+
+# Additional rules can be added below.
+# http://clang.llvm.org/docs/ClangFormatStyleOptions.html
+
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 100

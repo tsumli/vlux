@@ -1,0 +1,14 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "tools/shader_compiler/Cargo.toml"
+    ],
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.arguments": [
+        "-log=verbose",
+        "-pretty",
+        "--background-index",
+        "--compile-commands-dir=${workspaceFolder}/build/linux-x64-debug",
+        "--enable-config"
+    ]
+}
