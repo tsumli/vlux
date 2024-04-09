@@ -1,9 +1,9 @@
-#ifndef RASTERIZE_RENDER_PASS_H
-#define RASTERIZE_RENDER_PASS_H
+#ifndef RENDER_PASS_H
+#define RENDER_PASS_H
 
 #include "pch.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 class RenderPass {
    public:
     RenderPass() = delete;
@@ -25,5 +25,5 @@ class RenderPass {
     std::optional<VkRenderPass> render_pass_ = std::nullopt;
 };
 
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux
 #endif

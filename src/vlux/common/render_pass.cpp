@@ -1,6 +1,6 @@
 #include "render_pass.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 
 RenderPass::RenderPass(const VkDevice device, const VkFormat format,
                        const VkAttachmentDescription depth_stencil_attachment,
@@ -63,4 +63,4 @@ RenderPass::RenderPass(const VkDevice device, const VkFormat format,
     }
 }
 RenderPass::~RenderPass() { vkDestroyRenderPass(device_, render_pass_.value(), nullptr); }
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux

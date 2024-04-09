@@ -3,7 +3,7 @@
 #include "model/vertex.h"
 #include "shader/shader.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 GraphicsPipeline::GraphicsPipeline(const VkDevice device, const VkRenderPass render_pass,
                                    const VkDescriptorSetLayout descriptor_set_layout)
     : device_(device) {
@@ -141,4 +141,4 @@ GraphicsPipeline::~GraphicsPipeline() {
     vkDestroyPipeline(device_, graphics_pipeline_, nullptr);
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
 }
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux

@@ -5,7 +5,7 @@
 #include "transform.h"
 #include "uniform_buffer.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 
 DescriptorSet::DescriptorSet(const VkPhysicalDevice physical_device, const VkDevice device,
                              const VkDescriptorPool descriptor_pool,
@@ -80,4 +80,4 @@ DescriptorSet::DescriptorSet(const VkPhysicalDevice physical_device, const VkDev
     }
 }
 
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux

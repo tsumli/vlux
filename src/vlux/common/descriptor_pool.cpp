@@ -1,6 +1,6 @@
 #include "descriptor_pool.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 DescriptorPool::DescriptorPool(const VkDevice device, const uint32_t num_model) : device_(device) {
     const auto pool_sizes = std::to_array({
         VkDescriptorPoolSize{
@@ -27,4 +27,4 @@ DescriptorPool::DescriptorPool(const VkDevice device, const uint32_t num_model) 
 
 DescriptorPool::~DescriptorPool() { vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr); }
 
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux

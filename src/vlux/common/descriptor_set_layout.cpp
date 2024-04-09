@@ -1,6 +1,6 @@
 #include "descriptor_set_layout.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 DescriptorSetLayout::DescriptorSetLayout(const VkDevice device) : device_(device) {
     constexpr auto kLayoutBindings = std::to_array({
         // transform
@@ -44,4 +44,4 @@ DescriptorSetLayout::DescriptorSetLayout(const VkDevice device) : device_(device
 DescriptorSetLayout::~DescriptorSetLayout() {
     vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
 }
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux
