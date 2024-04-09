@@ -1,5 +1,3 @@
-version: "3.10"
-
 services:
   base: &default
     environment:
@@ -26,8 +24,8 @@ services:
 
   sc:
     <<: *default
-    command: cargo run --manifest-path tools/shader_compiler/Cargo.toml --bin compile --release -- -s ./src/shader -o ./processed
+    command: bash docker/shader_compile.sh
 
   sc-all:
     <<: *default
-    command: cargo run --manifest-path tools/shader_compiler/Cargo.toml --bin compile --release -- -s ./src/shader -o ./processed --all
+    command: bash docker/shader_compile.sh --all
