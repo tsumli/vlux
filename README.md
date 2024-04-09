@@ -34,6 +34,7 @@ or you can just use VSCode to launch.
 
 
 ## TODO
+- [ ] tone mapping
 - [ ] lighting
 - [ ] transparent pass
 - [ ] use config file
