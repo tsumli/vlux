@@ -1,5 +1,5 @@
-#ifndef RASTERIZE_DESCRIPTOR_SET_H
-#define RASTERIZE_DESCRIPTOR_SET_H
+#ifndef DESCRIPTOR_SET_H
+#define DESCRIPTOR_SET_H
 
 #include "pch.h"
 //
@@ -8,7 +8,7 @@
 #include "transform.h"
 #include "uniform_buffer.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 class DescriptorSet {
    public:
     DescriptorSet(const VkPhysicalDevice physical_device, const VkDevice device,
@@ -22,5 +22,5 @@ class DescriptorSet {
     std::shared_ptr<TextureSampler> texture_sampler_;
     std::vector<VkDescriptorSet> descriptor_sets_;
 };
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux
 #endif

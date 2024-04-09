@@ -3,7 +3,7 @@
 
 #include "pch.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 class GraphicsPipeline {
    public:
     GraphicsPipeline() = delete;
@@ -32,5 +32,5 @@ class GraphicsPipeline {
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
     VkPipeline graphics_pipeline_ = VK_NULL_HANDLE;
 };
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux
 #endif

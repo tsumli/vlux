@@ -3,17 +3,13 @@
 
 #include "pch.h"
 //
-#include "device_resource/device_resource.h"
+#include "common/descriptor_pool.h"
+#include "common/descriptor_set.h"
+#include "common/descriptor_set_layout.h"
+#include "common/frame_buffer.h"
+#include "common/graphics_pipeline.h"
+#include "common/render_pass.h"
 #include "draw/draw_strategy.h"
-#include "draw/rasterize/descriptor_pool.h"
-#include "draw/rasterize/descriptor_set.h"
-#include "draw/rasterize/descriptor_set_layout.h"
-#include "draw/rasterize/frame_buffer.h"
-#include "draw/rasterize/graphics_pipeline.h"
-#include "draw/rasterize/render_pass.h"
-#include "scene/scene.h"
-#include "transform.h"
-#include "uniform_buffer.h"
 
 namespace vlux::draw::rasterize {
 

@@ -1,9 +1,9 @@
-#ifndef RASTERIZE_FRAME_BUFFER_H
-#define RASTERIZE_FRAME_BUFFER_H
+#ifndef FRAME_BUFFER_H
+#define FRAME_BUFFER_H
 
 #include "pch.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 class FrameBuffer {
    public:
     FrameBuffer() = delete;
@@ -22,5 +22,5 @@ class FrameBuffer {
     VkDevice device_;
     std::vector<VkFramebuffer> framebuffers_;
 };
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux
 #endif

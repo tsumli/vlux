@@ -1,6 +1,10 @@
 #include "rasterize.h"
 
-#include "texture_view.h"
+#include "common/texture_view.h"
+#include "device_resource/device_resource.h"
+#include "scene/scene.h"
+#include "transform.h"
+#include "uniform_buffer.h"
 
 namespace vlux::draw::rasterize {
 DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo, Scene& scene,

@@ -1,6 +1,6 @@
 #include "frame_buffer.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 
 FrameBuffer::FrameBuffer(const VkRenderPass render_pass, const VkDevice device,
                          const uint32_t width, const uint32_t height,
@@ -32,4 +32,4 @@ FrameBuffer::~FrameBuffer() {
     }
 }
 
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux

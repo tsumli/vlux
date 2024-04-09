@@ -1,9 +1,9 @@
-#ifndef RASTERIZE_DESCRIPTOR_SET_LAYOUT_H
-#define RASTERIZE_DESCRIPTOR_SET_LAYOUT_H
+#ifndef DESCRIPTOR_SET_LAYOUT_H
+#define DESCRIPTOR_SET_LAYOUT_H
 
 #include "pch.h"
 
-namespace vlux::draw::rasterize {
+namespace vlux {
 class DescriptorSetLayout {
    public:
     DescriptorSetLayout(const VkDevice device);
@@ -15,5 +15,5 @@ class DescriptorSetLayout {
     const VkDevice device_;
     VkDescriptorSetLayout descriptor_set_layout_;
 };
-}  // namespace vlux::draw::rasterize
+}  // namespace vlux
 #endif

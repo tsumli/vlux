@@ -6,6 +6,12 @@ set(LIB_SRC
     vlux/gui.cpp
     vlux/transform.cpp
     vlux/uniform_buffer.cpp
+    vlux/common/frame_buffer.cpp
+    vlux/common/descriptor_pool.cpp
+    vlux/common/descriptor_set.cpp
+    vlux/common/descriptor_set_layout.cpp
+    vlux/common/graphics_pipeline.cpp
+    vlux/common/render_pass.cpp
     vlux/device_resource/barrier.cpp
     vlux/device_resource/buffer.cpp
     vlux/device_resource/command_pool.cpp
@@ -23,18 +29,13 @@ set(LIB_SRC
     vlux/device_resource/queue.cpp
     vlux/device_resource/utils.cpp
     vlux/draw/draw_strategy.cpp
-    vlux/draw/rasterize/descriptor_pool.cpp
-    vlux/draw/rasterize/descriptor_set.cpp
-    vlux/draw/rasterize/descriptor_set_layout.cpp
-    vlux/draw/rasterize/frame_buffer.cpp
-    vlux/draw/rasterize/graphics_pipeline.cpp
     vlux/draw/rasterize/rasterize.cpp
-    vlux/draw/rasterize/render_pass.cpp
     vlux/draw/raytracing/raytracing.cpp
     vlux/model/index.cpp
     vlux/model/gltf.cpp
     vlux/model/model.cpp
     vlux/model/vertex.cpp
+    vlux/postprocess/tonemapping.cpp
     vlux/scene/scene.cpp
     vlux/shader/shader.cpp
     vlux/texture/texture.cpp
