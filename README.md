@@ -34,6 +34,8 @@ or you can just use VSCode to launch.
 
 
 ## TODO
+- [ ] use config file
+- [ ] deferred rendering
 - [ ] cubemap
 - [ ] reflection
 - [ ] shadow
