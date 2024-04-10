@@ -8,9 +8,10 @@ set(LIB_SRC
     vlux/uniform_buffer.cpp
     vlux/common/frame_buffer.cpp
     vlux/common/descriptor_pool.cpp
-    vlux/common/descriptor_set.cpp
     vlux/common/descriptor_set_layout.cpp
+    vlux/common/descriptor_sets.cpp
     vlux/common/graphics_pipeline.cpp
+    vlux/common/pipeline_layout.cpp
     vlux/common/render_pass.cpp
     vlux/device_resource/barrier.cpp
     vlux/device_resource/buffer.cpp
