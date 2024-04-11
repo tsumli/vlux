@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <random>
 #include <ranges>
@@ -48,7 +49,8 @@ constexpr auto kValidationLayers = std::array<const char*, 0>();
 constexpr auto kValidationLayers = std::to_array<const char*>({"VK_LAYER_KHRONOS_validation"});
 #endif
 
-constexpr auto kDeviceExtensions = std::to_array<const char*>({VK_KHR_SWAPCHAIN_EXTENSION_NAME});
+constexpr auto kDeviceExtensions =
+    std::to_array<const char*>({VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_portability_subset"});
 constexpr auto kMaxFramesInFlight = 2;
 
 #endif
