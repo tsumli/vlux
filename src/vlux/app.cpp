@@ -127,8 +127,6 @@ void App::DrawFrame() {
     const auto& sync_object = device_resource_.GetSyncObject();
     const auto& swapchain = device_resource_.GetSwapchain();
     const auto& command_buffer = device_resource_.GetCommandBuffer();
-    const auto& framebuffers = draw_->GetVkFrameBuffers();
-    const auto& graphics_pipeline = draw_->GetVkGraphicsPipeline();
 
     sync_object.WaitAndResetFences();
 
@@ -163,8 +161,7 @@ void App::DrawFrame() {
 
     spdlog::debug("draw frame");
     vkResetCommandBuffer(command_buffer.GetVkCommandBuffer(), 0);
-    draw_->RecordCommandBuffer(scene_.value(), image_idx, current_frame_, framebuffers,
-                               swapchain.GetVkExtent(), graphics_pipeline,
+    draw_->RecordCommandBuffer(scene_.value(), image_idx, current_frame_, swapchain.GetVkExtent(),
                                command_buffer.GetVkCommandBuffer());
 
     // ImGui

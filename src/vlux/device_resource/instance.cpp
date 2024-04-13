@@ -35,12 +35,12 @@ Instance::Instance() {
                 kValidationLayers.empty()
                     ? nullptr
                     : static_cast<const VkDebugUtilsMessengerCreateInfoEXT*>(&debug_create_info),
+            .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
             .pApplicationInfo = &app_info,
             .enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size()),
             .ppEnabledLayerNames = kValidationLayers.data(),
             .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
             .ppEnabledExtensionNames = extensions.data(),
-            .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
         };
         return create_info;
     }();

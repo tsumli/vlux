@@ -7,22 +7,25 @@ namespace vlux {
 class RenderPass {
    public:
     RenderPass() = delete;
-    RenderPass(const VkDevice device, const VkFormat format,
-               const VkAttachmentDescription depth_stencil_attachment,
-               const VkAttachmentReference depth_stencil_attachment_ref);
-    ~RenderPass();
+    RenderPass(const VkDevice device, const VkRenderPassCreateInfo render_pass_info)
+        : device_(device) {
+        if (vkCreateRenderPass(device, &render_pass_info, nullptr, &render_pass_) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create render pass!");
+        }
+    }
+    ~RenderPass() { vkDestroyRenderPass(device_, render_pass_, nullptr); }
 
     // accessor
     VkRenderPass GetVkRenderPass() const {
-        if (!render_pass_.has_value()) {
+        if (render_pass_ == VK_NULL_HANDLE) {
             throw std::runtime_error("`DeviceResource::render_pass_` has no values.");
         }
-        return render_pass_.value();
+        return render_pass_;
     }
 
    private:
     const VkDevice device_;
-    std::optional<VkRenderPass> render_pass_ = std::nullopt;
+    VkRenderPass render_pass_ = VK_NULL_HANDLE;
 };
 
 }  // namespace vlux

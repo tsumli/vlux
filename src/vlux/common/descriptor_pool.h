@@ -6,8 +6,13 @@
 namespace vlux {
 class DescriptorPool {
    public:
-    DescriptorPool(const VkDevice device, const uint32_t num_model);
-    ~DescriptorPool();
+    DescriptorPool(const VkDevice device, const VkDescriptorPoolCreateInfo pool_info)
+        : device_(device) {
+        if (vkCreateDescriptorPool(device_, &pool_info, nullptr, &descriptor_pool_) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create descriptor pool!");
+        }
+    }
+    ~DescriptorPool() { vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr); }
 
     VkDescriptorPool GetVkDescriptorPool() const { return descriptor_pool_; }
 
