@@ -22,8 +22,7 @@ class DeviceResource {
 
     // accessor
     GLFWwindow* GetGLFWwindow() const { return window_.GetGLFWwindow(); }
-    uint32_t GetWidth() const { return window_.GetWidth(); }
-    uint32_t GetHeight() const { return window_.GetHeight(); }
+    const Window& GetWindow() const { return window_; }
     const Device& GetDevice() const {
         if (!device_.has_value()) {
             throw std::runtime_error("`DeviceResource::device_` has no values.");

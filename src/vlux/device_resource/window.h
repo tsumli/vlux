@@ -1,5 +1,6 @@
 #ifndef WINDOW_H
 #define WINDOW_H
+
 #include "pch.h"
 
 namespace vlux {
@@ -14,8 +15,7 @@ class Window {
      * @param height height of the window
      * @param title title of the window
      */
-    Window(const int width, const int height, const std::string_view title)
-        : width_(width), height_(height) {
+    Window(const int width, const int height, const std::string_view title) {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -32,13 +32,15 @@ class Window {
     }
 
     GLFWwindow* GetGLFWwindow() const { return window_; }
-    uint32_t GetWidth() const { return width_; }
-    uint32_t GetHeight() const { return height_; }
+
+    std::pair<uint32_t, uint32_t> GetWindowSize() const {
+        int width, height;
+        glfwGetWindowSize(window_, &width, &height);
+        return {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    }
 
    private:
     GLFWwindow* window_;
-    const uint32_t width_;
-    const uint32_t height_;
 };
 
 }  // namespace vlux

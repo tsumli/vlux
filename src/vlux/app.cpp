@@ -25,16 +25,16 @@ App::App(DeviceResource& device_resource)
 
     // setup control
     control_.emplace(device_resource_.GetGLFWwindow());
-    camera_.emplace(glm::vec3{80.0f, 20.0f, -12.0f}, glm::vec3{-1.35f, -0.02f, 0.00f},
-                    device_resource.GetWidth(), device_resource.GetHeight());
+    const auto [width, height] = device_resource.GetWindow().GetWindowSize();
+    camera_.emplace(glm::vec3{80.0f, 20.0f, -12.0f}, glm::vec3{0.0f, 0.0f, 0.0f}, width, height);
 
     // setup draw
     draw_ = std::make_unique<draw::rasterize::DrawRasterize>(transform_ubo_, scene_.value(),
                                                              device_resource_);
 
     // Setup GUI
-    const auto& queue_family = FindQueueFamilies(device_resource_.GetVkPhysicalDevice(),
-                                                 device_resource_.GetSurface().GetVkSurface());
+    const auto queue_family = FindQueueFamilies(device_resource_.GetVkPhysicalDevice(),
+                                                device_resource_.GetSurface().GetVkSurface());
     const auto gui_input = GuiInput{
         .instance = device_resource_.GetInstance().GetVkInstance(),
         .device = device_resource_.GetDevice().GetVkDevice(),
@@ -196,8 +196,8 @@ void App::DrawFrame() {
     spdlog::debug("draw frame");
     [&]() {
         vkResetCommandBuffer(command_buffer.GetVkCommandBuffer(), 0);
-        draw_->RecordCommandBuffer(scene_.value(), image_idx, current_frame_,
-                                   swapchain.GetVkExtent(), command_buffer.GetVkCommandBuffer());
+        draw_->RecordCommandBuffer(image_idx, current_frame_, swapchain.GetVkExtent(),
+                                   command_buffer.GetVkCommandBuffer());
     }();
 
     // ImGui

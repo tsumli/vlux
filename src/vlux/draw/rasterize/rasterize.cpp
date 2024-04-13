@@ -1,5 +1,7 @@
 #include "rasterize.h"
 
+#include <ranges>
+
 #include "common/texture_view.h"
 #include "device_resource/device_resource.h"
 #include "pch.h"
@@ -90,7 +92,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         };
-
         constexpr auto kColorAttachmentRef = std::to_array<VkAttachmentReference>({
             {
                 .attachment = 0,
@@ -380,8 +381,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 }
 
-void DrawRasterize::RecordCommandBuffer(const Scene& scene, const uint32_t image_idx,
-                                        const uint32_t cur_frame,
+void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx, const uint32_t cur_frame,
                                         const VkExtent2D& swapchain_extent,
                                         const VkCommandBuffer command_buffer) {
     const auto begin_info = VkCommandBufferBeginInfo{
@@ -428,8 +428,7 @@ void DrawRasterize::RecordCommandBuffer(const Scene& scene, const uint32_t image
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    for (std::size_t model_i = 0;
-         const auto& model : scene.GetModels()) {  // TODO: use range (enumerate)
+    for (const auto&& [model_i, model] : std::ranges::views::enumerate(scene_.GetModels())) {
         const auto vertex_buffers =
             std::vector<VkBuffer>{model.GetVertexBuffers()[0].GetVertexBuffer()};
         const auto offsets = std::vector<VkDeviceSize>{0};
@@ -443,7 +442,6 @@ void DrawRasterize::RecordCommandBuffer(const Scene& scene, const uint32_t image
                                 descriptor_set.data(), 0, nullptr);
         vkCmdDrawIndexed(command_buffer,
                          static_cast<uint32_t>(model.GetIndexBuffers()[0].GetSize()), 1, 0, 0, 0);
-        model_i++;
     }
 }
 

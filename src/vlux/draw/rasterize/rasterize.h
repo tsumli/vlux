@@ -23,25 +23,12 @@ class DrawRasterize final : public DrawStrategy {
                   const DeviceResource& device_resource);
     ~DrawRasterize() override = default;
 
-    void RecordCommandBuffer(const Scene& scene, const uint32_t image_idx, const uint32_t cur_frame,
+    void RecordCommandBuffer(const uint32_t image_idx, const uint32_t cur_frame,
                              const VkExtent2D& swapchain_extent,
                              const VkCommandBuffer command_buffer) override;
 
     void OnRecreateSwapChain(const DeviceResource& device_resource) override;
-
     VkRenderPass GetVkRenderPass() const override { return render_pass_->GetVkRenderPass(); }
-    VkDescriptorPool GetVkDescriptorPool() const override {
-        return descriptor_pool_->GetVkDescriptorPool();
-    }
-    VkDescriptorSetLayout GetVkDescriptorSetLayout() const override {
-        return descriptor_set_layout_->GetVkDescriptorSetLayout();
-    }
-    VkFramebuffer GetVkFrameBuffer(const size_t idx) const override {
-        return framebuffer_.at(idx).GetVkFrameBuffer();
-    }
-    VkPipeline GetVkGraphicsPipeline() const override {
-        return graphics_pipeline_->GetVkGraphicsPipeline();
-    }
 
    private:
     const Scene& scene_;
