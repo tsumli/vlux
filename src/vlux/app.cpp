@@ -1,7 +1,10 @@
 #include "app.h"
 
+#include <vulkan/vulkan_core.h>
+
 #include <stdexcept>
 
+#include "common/image.h"
 #include "common/queue.h"
 #include "control.h"
 #include "device_resource/command_buffer.h"
@@ -198,6 +201,48 @@ void App::DrawFrame() {
         vkResetCommandBuffer(command_buffer.GetVkCommandBuffer(), 0);
         draw_->RecordCommandBuffer(image_idx, current_frame_, swapchain.GetVkExtent(),
                                    command_buffer.GetVkCommandBuffer());
+    }();
+
+    const auto& output_render_target = draw_->GetOutputRenderTarget();
+
+    // Write Swapchain
+    spdlog::debug("write swapchain");
+    [&]() {
+        // TransitionImageLayout(
+        //     command_buffer.GetVkCommandBuffer(), output_render_target.GetVkImage(),
+        //     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+        // TransitionImageLayout(command_buffer.GetVkCommandBuffer(),
+        //                       device_resource_.GetSwapchain().GetVkImages().at(image_idx),
+        //                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        //                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        const auto image_copy = VkImageCopy{
+            .srcSubresource =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .layerCount = 1,
+                },
+            .dstSubresource =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .layerCount = 1,
+                },
+            .extent =
+                {
+                    .width = swapchain.GetWidth(),
+                    .height = swapchain.GetHeight(),
+                    .depth = 1,
+                },
+        };
+        vkCmdCopyImage(command_buffer.GetVkCommandBuffer(), output_render_target.GetVkImage(),
+                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain.GetVkImages().at(image_idx),
+                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 1, &image_copy);
+
+        // TransitionImageLayout(command_buffer.GetVkCommandBuffer(),
+        //                       device_resource_.GetSwapchain().GetVkImages().at(image_idx),
+        //                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        //                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     }();
 
     // ImGui

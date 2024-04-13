@@ -16,6 +16,7 @@
 #include "common/render_pass.h"
 #include "common/render_target.h"
 #include "draw/draw_strategy.h"
+#include "scene/scene.h"
 #include "texture/texture_sampler.h"
 #include "transform.h"
 #include "uniform_buffer.h"
@@ -34,6 +35,9 @@ class DrawRasterize final : public DrawStrategy {
 
     void OnRecreateSwapChain(const DeviceResource& device_resource) override;
     VkRenderPass GetVkRenderPass() const override { return render_pass_->GetVkRenderPass(); }
+    const RenderTarget& GetOutputRenderTarget() const override {
+        return render_targets_.at(RenderTargetType::kColor).value();
+    }
 
    private:
     const Scene& scene_;
@@ -49,7 +53,7 @@ class DrawRasterize final : public DrawStrategy {
     std::shared_ptr<TextureSampler> texture_sampler_;
 
     // render targets
-    enum class RenderTargetType { kColor, kDepthStencil, kCount };
+    enum class RenderTargetType { kColor, kNormal, kDepthStencil, kCount };
     std::unordered_map<RenderTargetType, std::optional<RenderTarget>> render_targets_;
 };
 }  // namespace vlux::draw::rasterize

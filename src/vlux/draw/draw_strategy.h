@@ -1,8 +1,8 @@
 #ifndef DRAW_STRATEGY_H
 #define DRAW_STRATEGY_H
 
+#include "common/render_target.h"
 #include "device_resource/device_resource.h"
-#include "scene/scene.h"
 namespace vlux::draw {
 class DrawStrategy {
    public:
@@ -13,6 +13,7 @@ class DrawStrategy {
                                      const VkExtent2D& swapchain_extent,
                                      const VkCommandBuffer command_buffer) = 0;
     virtual void OnRecreateSwapChain(const DeviceResource& device_resource) = 0;
+    virtual const RenderTarget& GetOutputRenderTarget() const = 0;
 };
 }  // namespace vlux::draw
 

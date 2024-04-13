@@ -1,6 +1,6 @@
 #include "rasterize.h"
 
-#include <ranges>
+#include <vulkan/vulkan_core.h>
 
 #include "common/texture_view.h"
 #include "common/utils.h"
@@ -18,6 +18,35 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     : scene_(scene), transform_ubo_(transform_ubo) {
     const auto device = device_resource.GetDevice().GetVkDevice();
     const auto physical_device = device_resource.GetVkPhysicalDevice();
+    const auto [width, height] = device_resource.GetWindow().GetWindowSize();
+
+    // Color
+    [&]() {
+        render_targets_[RenderTargetType::kColor].emplace(device);
+        auto& color = render_targets_.at(RenderTargetType::kColor).value();
+        // color.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        color.SetFormat(VK_FORMAT_R8G8B8A8_SRGB);
+        CreateImage(width, height, color.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color.GetVkImageRef(),
+                    color.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(color.GetVkImageRef(), color.GetVkFormat(),
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        color.SetImageView(image_view);
+    }();
+
+    // Normal
+    [&]() {
+        render_targets_[RenderTargetType::kNormal].emplace(device);
+        auto& normal = render_targets_.at(RenderTargetType::kNormal).value();
+        normal.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, normal.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    normal.GetVkImageRef(), normal.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(normal.GetVkImageRef(), normal.GetVkFormat(),
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        normal.SetImageView(image_view);
+    }();
 
     // Depth Stencil
     [&]() {
@@ -32,14 +61,13 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             FindSupportedFormat(candidates, VK_IMAGE_TILING_OPTIMAL,
                                 VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, physical_device);
         depth_stencil.SetFormat(format);
-
-        const auto [width, height] = device_resource.GetWindow().GetWindowSize();
-        CreateImage(width, height, depth_stencil.GetFormat(), VK_IMAGE_TILING_OPTIMAL,
+        CreateImage(width, height, depth_stencil.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_stencil.GetImageRef(),
-                    depth_stencil.GetDeviceMemoryRef(), device, physical_device);
-        auto image_view = CreateImageView(depth_stencil.GetImageRef(), depth_stencil.GetFormat(),
-                                          VK_IMAGE_ASPECT_DEPTH_BIT, device);
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_stencil.GetVkImageRef(),
+                    depth_stencil.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view =
+            CreateImageView(depth_stencil.GetVkImageRef(), depth_stencil.GetVkFormat(),
+                            VK_IMAGE_ASPECT_DEPTH_BIT, device);
         depth_stencil.SetImageView(image_view);
     }();
 
@@ -107,42 +135,61 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
     // RenderPass
     [&]() {
-        const auto color_attachment = VkAttachmentDescription{
-            .format = device_resource.GetSwapchain().GetFormat(),
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        };
+        const auto attachment_descs = std::to_array({
+            // Color
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kColor)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
+            // Normal
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kNormal)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
+            // Depth
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
+        });
 
         constexpr auto kColorAttachmentRef = std::to_array<VkAttachmentReference>({
             {
                 .attachment = 0,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            {
+                .attachment = 1,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
         });
 
-        const auto depth_stencil_attachment = VkAttachmentDescription{
-            .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetFormat(),
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        };
         constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
-            .attachment = 1,
+            .attachment = 2,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
 
         const auto subpass = VkSubpassDescription{
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
+            .colorAttachmentCount = static_cast<uint32_t>(kColorAttachmentRef.size()),
             .pColorAttachments = kColorAttachmentRef.data(),
             .pDepthStencilAttachment = &kDepthStencilAttachmentRef,
         };
@@ -160,11 +207,10 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             },
         });
 
-        const auto attachments = std::to_array({color_attachment, depth_stencil_attachment});
         const auto render_pass_info = VkRenderPassCreateInfo{
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-            .attachmentCount = static_cast<uint32_t>(attachments.size()),
-            .pAttachments = attachments.data(),
+            .attachmentCount = static_cast<uint32_t>(attachment_descs.size()),
+            .pAttachments = attachment_descs.data(),
             .subpassCount = 1,
             .pSubpasses = &subpass,
             .dependencyCount = static_cast<uint32_t>(dependencies.size()),
@@ -244,25 +290,41 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .stencilTestEnable = VK_FALSE,
         };
 
-        constexpr auto kColorBlendAttachment = VkPipelineColorBlendAttachmentState{
-            .blendEnable = VK_TRUE,
-            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-            .colorBlendOp = VK_BLEND_OP_ADD,
-            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-            .alphaBlendOp = VK_BLEND_OP_ADD,
-            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-        };
+        constexpr auto kColorBlendAttachment = std::to_array({
+            // Color
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_TRUE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
+
+            // Normal
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_TRUE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
+        });
 
         const auto color_blending = [&]() {
             auto color_blending = VkPipelineColorBlendStateCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                 .logicOpEnable = VK_FALSE,
                 .logicOp = VK_LOGIC_OP_COPY,
-                .attachmentCount = 1,
-                .pAttachments = &kColorBlendAttachment,
+                .attachmentCount = static_cast<uint32_t>(kColorBlendAttachment.size()),
+                .pAttachments = kColorBlendAttachment.data(),
             };
             color_blending.blendConstants[0] = 0.0f;
             color_blending.blendConstants[1] = 0.0f;
@@ -304,15 +366,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
     // FrameBuffer
     [&]() {
-        const auto width = device_resource.GetSwapchain().GetVkExtent().width;
-        const auto height = device_resource.GetSwapchain().GetVkExtent().height;
-        const auto image_views = device_resource.GetSwapchain().GetVkImageViews();
-
-        framebuffer_.reserve(image_views.size());
-        for (size_t i = 0; i < image_views.size(); i++) {
+        framebuffer_.reserve(kMaxFramesInFlight);
+        for (size_t frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
             const auto attachments = std::to_array(
-                {image_views[i],
-                 render_targets_.at(RenderTargetType::kDepthStencil)->GetImageView()});
+                {render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                 .renderPass = render_pass_->GetVkRenderPass(),
@@ -430,8 +489,26 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx, const uint32_t
         throw std::runtime_error("failed to begin recording command buffer!");
     }
 
-    constexpr auto kClearValues = std::to_array<VkClearValue>(
-        {{.color = {{0.0f, 0.0f, 0.0f, 1.0f}}}, {.depthStencil = {1.0f, 0}}});
+    constexpr auto kClearValues = std::to_array<VkClearValue>({
+        // Color
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 1.0f},
+                },
+        },
+        // Normal
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 1.0f},
+                },
+        },
+        // Depth Stencil
+        {
+            .depthStencil = {1.0f, 0},
+        },
+    });
 
     const auto render_pass_info = VkRenderPassBeginInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,

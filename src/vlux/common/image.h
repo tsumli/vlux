@@ -1,6 +1,8 @@
 #ifndef COMMON_IMAGE_H
 #define COMMON_IMAGE_H
 
+#include <vulkan/vulkan_core.h>
+
 #include "pch.h"
 
 namespace vlux {
@@ -16,6 +18,9 @@ VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags a
 void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_t width,
                        const uint32_t height, const VkQueue graphics_queue,
                        const VkCommandPool command_pool, const VkDevice device);
+
+void TransitionImageLayout(const VkCommandBuffer command_buffer, const VkImage image,
+                           const VkImageLayout old_layout, const VkImageLayout new_layout);
 
 class Image {
    public:

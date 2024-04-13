@@ -69,7 +69,7 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
             .imageColorSpace = surface_format.colorSpace,
             .imageExtent = extent_.value(),
             .imageArrayLayers = 1,
-            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             .preTransform = swapchain_support.capabilities.currentTransform,
             .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             .presentMode = present_mode,
