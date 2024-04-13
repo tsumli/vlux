@@ -46,3 +46,4 @@ or you can just use VSCode to launch.
 - [ ] LOD
 - [ ] raytracing
 - [ ] mesh shader
+- [ ] mac support
