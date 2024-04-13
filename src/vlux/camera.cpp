@@ -20,9 +20,9 @@ void Camera::UpdatePosition(const int move_forward, const int move_right, const 
     pos_ += Vec4ToVec3(cam_up_) * gain * static_cast<float>(move_up);
 }
 
-void Camera::UpdateRotation(const int cur_up, const int cur_right, const float gain) {
-    rot_.x -= gain * static_cast<float>(cur_right);
-    rot_.y -= gain * static_cast<float>(cur_up);
+void Camera::UpdateRotation(const float cur_right, const float cur_up, const float gain) {
+    rot_.x -= gain * cur_right;
+    rot_.y += gain * cur_up;
 
     auto clamp = [](const float v) {
         const auto pi = std::numbers::pi_v<float>;

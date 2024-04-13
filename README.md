@@ -4,6 +4,12 @@ Real-time rendering playground using C++ and Vulkan.
 ## Description
 ![screenshot](assets/screenshot.png)
 
+You can control camera with
+- W/A/S/D: forward/left/backward/right
+- E/Q: up/down
+- mouse: direction
+  - right-click to enable/disable mouse control (enabled in default)
+
 ## Steps
 ### 1. Create docker image
 ```shell
@@ -34,7 +40,7 @@ or you can just use VSCode to launch.
 
 
 ## TODO
-- [ ] mouse controlling
+- [x] mouse controlling
 - [ ] tone mapping
 - [ ] lighting
 - [ ] transparent pass
