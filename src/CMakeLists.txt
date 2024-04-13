@@ -7,7 +7,6 @@ set(LIB_SRC
     vlux/transform.cpp
     vlux/uniform_buffer.cpp
     vlux/common/buffer.cpp
-    vlux/common/depth_stencil.cpp
     vlux/common/descriptor_pool.cpp
     vlux/common/descriptor_set_layout.cpp
     vlux/common/descriptor_sets.cpp
@@ -17,6 +16,7 @@ set(LIB_SRC
     vlux/common/pipeline_layout.cpp
     vlux/common/queue.cpp
     vlux/common/render_pass.cpp
+    vlux/common/render_target.cpp
     vlux/common/utils.cpp
     vlux/device_resource/barrier.cpp
     vlux/device_resource/command_pool.cpp

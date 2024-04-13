@@ -4,7 +4,6 @@
 //
 #include "command_buffer.h"
 #include "command_pool.h"
-#include "common/depth_stencil.h"
 #include "debug_messenger.h"
 #include "device.h"
 #include "instance.h"
@@ -71,12 +70,6 @@ class DeviceResource {
         }
         return command_pool_.value();
     }
-    const DepthStencil& GetDepthStencil() const {
-        if (!depth_stencil_.has_value()) {
-            throw std::runtime_error("`DeviceResource::depth_stencil_` has no values.");
-        }
-        return depth_stencil_.value();
-    }
     const VkQueue& GetGraphicsQueue() const {
         if (graphics_queue_ == VK_NULL_HANDLE) {
             throw std::runtime_error("`DeviceResource::graphics_queue_ == `VK_NULL_HANDLE`");
@@ -120,7 +113,6 @@ class DeviceResource {
     std::optional<Surface> surface_ = std::nullopt;
     std::optional<Swapchain> swapchain_ = std::nullopt;
     std::optional<DebugMessenger> debug_messenger_ = std::nullopt;
-    std::optional<DepthStencil> depth_stencil_ = std::nullopt;
     std::optional<CommandPool> command_pool_ = std::nullopt;
     std::optional<CommandBuffer> command_buffer_ = std::nullopt;
     std::optional<SyncObject> sync_object_ = std::nullopt;

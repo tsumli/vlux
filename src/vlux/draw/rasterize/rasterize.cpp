@@ -3,6 +3,7 @@
 #include <ranges>
 
 #include "common/texture_view.h"
+#include "common/utils.h"
 #include "device_resource/device_resource.h"
 #include "pch.h"
 #include "scene/scene.h"
@@ -17,6 +18,30 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     : scene_(scene), transform_ubo_(transform_ubo) {
     const auto device = device_resource.GetDevice().GetVkDevice();
     const auto physical_device = device_resource.GetVkPhysicalDevice();
+
+    // Depth Stencil
+    [&]() {
+        render_targets_[RenderTargetType::kDepthStencil].emplace(device);
+        auto& depth_stencil = render_targets_.at(RenderTargetType::kDepthStencil).value();
+        const auto candidates = std::vector<VkFormat>({
+            VK_FORMAT_D32_SFLOAT,
+            VK_FORMAT_D32_SFLOAT_S8_UINT,
+            VK_FORMAT_D24_UNORM_S8_UINT,
+        });
+        const auto format =
+            FindSupportedFormat(candidates, VK_IMAGE_TILING_OPTIMAL,
+                                VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, physical_device);
+        depth_stencil.SetFormat(format);
+
+        const auto [width, height] = device_resource.GetWindow().GetWindowSize();
+        CreateImage(width, height, depth_stencil.GetFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_stencil.GetImageRef(),
+                    depth_stencil.GetDeviceMemoryRef(), device, physical_device);
+        auto image_view = CreateImageView(depth_stencil.GetImageRef(), depth_stencil.GetFormat(),
+                                          VK_IMAGE_ASPECT_DEPTH_BIT, device);
+        depth_stencil.SetImageView(image_view);
+    }();
 
     // DescriptorSetLayout
     [&]() {
@@ -92,6 +117,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         };
+
         constexpr auto kColorAttachmentRef = std::to_array<VkAttachmentReference>({
             {
                 .attachment = 0,
@@ -99,13 +125,26 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             },
         });
 
-        const auto depth_stencil_attachment_ref =
-            device_resource.GetDepthStencil().CreateAttachmentRef();
+        const auto depth_stencil_attachment = VkAttachmentDescription{
+            .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetFormat(),
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+        constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
+            .attachment = 1,
+            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+
         const auto subpass = VkSubpassDescription{
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
             .colorAttachmentCount = 1,
             .pColorAttachments = kColorAttachmentRef.data(),
-            .pDepthStencilAttachment = &depth_stencil_attachment_ref,
+            .pDepthStencilAttachment = &kDepthStencilAttachmentRef,
         };
         const auto dependencies = std::to_array({
             VkSubpassDependency{
@@ -121,8 +160,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             },
         });
 
-        const auto depth_stencil_attachment =
-            device_resource.GetDepthStencil().CreateAttachmentDesc();
         const auto attachments = std::to_array({color_attachment, depth_stencil_attachment});
         const auto render_pass_info = VkRenderPassCreateInfo{
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -270,11 +307,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         const auto width = device_resource.GetSwapchain().GetVkExtent().width;
         const auto height = device_resource.GetSwapchain().GetVkExtent().height;
         const auto image_views = device_resource.GetSwapchain().GetVkImageViews();
-        const auto depth_image_view = device_resource.GetDepthStencil().GetVkImageView();
 
         framebuffer_.reserve(image_views.size());
         for (size_t i = 0; i < image_views.size(); i++) {
-            const auto attachments = std::to_array({image_views[i], depth_image_view});
+            const auto attachments = std::to_array(
+                {image_views[i],
+                 render_targets_.at(RenderTargetType::kDepthStencil)->GetImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                 .renderPass = render_pass_->GetVkRenderPass(),

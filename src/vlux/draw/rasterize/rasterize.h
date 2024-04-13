@@ -1,5 +1,9 @@
-#ifndef RASTERIZE_H
-#define RASTERIZE_H
+#ifndef DRAW_RASTERIZE_H
+#define DRAW_RASTERIZE_H
+
+#include <vulkan/vulkan_core.h>
+
+#include <unordered_map>
 
 #include "pch.h"
 //
@@ -10,6 +14,7 @@
 #include "common/graphics_pipeline.h"
 #include "common/pipeline_layout.h"
 #include "common/render_pass.h"
+#include "common/render_target.h"
 #include "draw/draw_strategy.h"
 #include "texture/texture_sampler.h"
 #include "transform.h"
@@ -42,6 +47,10 @@ class DrawRasterize final : public DrawStrategy {
     std::vector<FrameBuffer> framebuffer_;
     std::vector<std::vector<DescriptorSets>> descriptor_sets_;
     std::shared_ptr<TextureSampler> texture_sampler_;
+
+    // render targets
+    enum class RenderTargetType { kColor, kDepthStencil, kCount };
+    std::unordered_map<RenderTargetType, std::optional<RenderTarget>> render_targets_;
 };
 }  // namespace vlux::draw::rasterize
 
