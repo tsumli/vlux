@@ -5,7 +5,6 @@
 #include "command_buffer.h"
 #include "command_pool.h"
 #include "debug_messenger.h"
-#include "depth_stencil.h"
 #include "device.h"
 #include "instance.h"
 #include "surface.h"
@@ -22,8 +21,7 @@ class DeviceResource {
 
     // accessor
     GLFWwindow* GetGLFWwindow() const { return window_.GetGLFWwindow(); }
-    uint32_t GetWidth() const { return window_.GetWidth(); }
-    uint32_t GetHeight() const { return window_.GetHeight(); }
+    const Window& GetWindow() const { return window_; }
     const Device& GetDevice() const {
         if (!device_.has_value()) {
             throw std::runtime_error("`DeviceResource::device_` has no values.");
@@ -72,12 +70,6 @@ class DeviceResource {
         }
         return command_pool_.value();
     }
-    const DepthStencil& GetDepthStencil() const {
-        if (!depth_stencil_.has_value()) {
-            throw std::runtime_error("`DeviceResource::depth_stencil_` has no values.");
-        }
-        return depth_stencil_.value();
-    }
     const VkQueue& GetGraphicsQueue() const {
         if (graphics_queue_ == VK_NULL_HANDLE) {
             throw std::runtime_error("`DeviceResource::graphics_queue_ == `VK_NULL_HANDLE`");
@@ -121,7 +113,6 @@ class DeviceResource {
     std::optional<Surface> surface_ = std::nullopt;
     std::optional<Swapchain> swapchain_ = std::nullopt;
     std::optional<DebugMessenger> debug_messenger_ = std::nullopt;
-    std::optional<DepthStencil> depth_stencil_ = std::nullopt;
     std::optional<CommandPool> command_pool_ = std::nullopt;
     std::optional<CommandBuffer> command_buffer_ = std::nullopt;
     std::optional<SyncObject> sync_object_ = std::nullopt;

@@ -1,8 +1,7 @@
 #ifndef COMMAND_BUFFER_H
 #define COMMAND_BUFFER_H
 #include "pch.h"
-//
-#include "scene/scene.h"
+
 namespace vlux {
 class CommandBuffer {
    public:
