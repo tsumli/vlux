@@ -28,9 +28,18 @@ class App {
 
     DeviceResource& device_resource_;
     std::optional<Gui> gui_ = std::nullopt;
-    std::optional<Control> control_ = std::nullopt;
     std::optional<Scene> scene_ = std::nullopt;
     std::optional<Camera> camera_ = std::nullopt;
+
+    std::optional<Control> control_ = std::nullopt;
+    struct MouseConfig {
+        float sens{0.001f};
+    } mouse_config_;
+    enum class MouseRightButtonState : uint8_t {
+        kReleased,
+        kTriggered,
+        kCount,
+    } mouse_right_button_state_ = MouseRightButtonState::kReleased;
 
     // UBO
     UniformBuffer<TransformParams> transform_ubo_;

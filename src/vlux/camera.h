@@ -24,7 +24,8 @@ class Camera {
     const glm::vec3& GetRotation() const { return rot_; }
     void UpdatePosition(const int move_forward, const int move_right, const int move_up,
                         const float gain);
-    void UpdateRotation(const int cur_up, const int cur_right, const float gain);
+    void UpdateRotation(const float cur_right, const float cur_up, const float gain);
+
     glm::mat4x4 CreateViewMatrix() const;
 
     TransformParams CreateTransformParams();

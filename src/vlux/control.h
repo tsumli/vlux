@@ -1,5 +1,7 @@
 #ifndef CONTROL_H
 #define CONTROL_H
+#include <GLFW/glfw3.h>
+
 #include "pch.h"
 
 namespace vlux {
@@ -16,20 +18,49 @@ class Keyboard {
    public:
     Keyboard(GLFWwindow* window);
 
-    KeyboardInput GetInput();
-    int GetState(int key);
+    KeyboardInput GetInput() const;
+    int GetState(int key) const;
 
    private:
     GLFWwindow* window_;
 };
 
+struct MouseButtonInput {
+    bool left;
+    bool middle;
+    bool right;
+};
+
+class Mouse {
+   public:
+    using Position = std::pair<double, double>;
+    Mouse() = delete;
+    explicit Mouse(GLFWwindow* window) : window_(window) {}
+    Position GetMouseDisplacement() const;
+    MouseButtonInput GetButtonChanges() const;
+    void RecenterCursor() const;
+    void MakeCursorHidden() const;
+    void MakeCursorVisible() const;
+    void UpdateButton();
+
+   private:
+    GLFWwindow* window_;
+    MouseButtonInput last_button_input_;
+    MouseButtonInput current_button_input_;
+
+    MouseButtonInput GetButtonInput() const;
+};
+
 class Control {
    public:
-    Control(GLFWwindow* window) : keyboard_(window) {}
-    KeyboardInput GetKeyboardInput() { return keyboard_.GetInput(); }
+    Control() = delete;
+    explicit Control(GLFWwindow* window) : keyboard_(window), mouse_(window) {}
+    Keyboard& GetKeyboard() { return keyboard_; }
+    Mouse& GetMouse() { return mouse_; }
 
    private:
     Keyboard keyboard_;
+    Mouse mouse_;
 };
 
 }  // namespace vlux

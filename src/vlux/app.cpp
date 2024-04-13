@@ -1,5 +1,8 @@
 #include "app.h"
 
+#include <stdexcept>
+
+#include "control.h"
 #include "device_resource/command_buffer.h"
 #include "device_resource/queue.h"
 #include "draw/rasterize/rasterize.h"
@@ -145,24 +148,56 @@ void App::DrawFrame() {
     }
 
     spdlog::debug("input");
-    const auto key_input = control_->GetKeyboardInput();
-    if (key_input.exit == 1) {
-        spdlog::info("Escape key was pressed to exit");
-        std::terminate();
-    }
-    const auto elapsed_seconds = frame_timer_.GetElapsedSeconds();
-    camera_->UpdatePosition(key_input.move_forward, key_input.move_right, key_input.move_up,
-                            100.0f * elapsed_seconds);
-    camera_->UpdateRotation(key_input.cursor_up, key_input.cursor_right, 3.0f * elapsed_seconds);
+    [&]() {
+        auto& keyboard = control_->GetKeyboard();
+        auto& mouse = control_->GetMouse();
+        const auto key_input = keyboard.GetInput();
+        if (key_input.exit == 1) {
+            spdlog::info("Escape key was pressed to exit");
+            std::terminate();
+        }
+        const auto elapsed_seconds = frame_timer_.GetElapsedSeconds();
+        camera_->UpdatePosition(key_input.move_forward, key_input.move_right, key_input.move_up,
+                                100.0f * elapsed_seconds);
+
+        mouse.UpdateButton();
+        const auto mouse_button_changes = mouse.GetButtonChanges();
+        if (mouse_button_changes.right) {
+            switch (mouse_right_button_state_) {
+                using enum MouseRightButtonState;
+                case kReleased:
+                    mouse_right_button_state_ = kTriggered;
+                    mouse.MakeCursorHidden();
+                    break;
+                case kTriggered:
+                    mouse_right_button_state_ = kReleased;
+                    mouse.RecenterCursor();
+                    mouse.MakeCursorVisible();
+                    break;
+                default:
+                    std::runtime_error("invalid mouse right button state");
+            }
+        }
+        if (mouse_right_button_state_ == MouseRightButtonState::kTriggered) {
+            const auto mouse_position = mouse.GetMouseDisplacement();
+            mouse.RecenterCursor();
+            camera_->UpdateRotation(mouse_position.first, mouse_position.second,
+                                    mouse_config_.sens);
+        }
+    }();
 
     spdlog::debug("update ubo");
-    auto transform = camera_->CreateTransformParams();
-    transform_ubo_.UpdateUniformBuffer(transform, current_frame_);
+    [&]() {
+        auto transform = camera_->CreateTransformParams();
+        transform_ubo_.UpdateUniformBuffer(transform, current_frame_);
+    }();
 
     spdlog::debug("draw frame");
-    vkResetCommandBuffer(command_buffer.GetVkCommandBuffer(), 0);
-    draw_->RecordCommandBuffer(scene_.value(), image_idx, current_frame_, swapchain.GetVkExtent(),
-                               command_buffer.GetVkCommandBuffer());
+    [&]() {
+        vkResetCommandBuffer(command_buffer.GetVkCommandBuffer(), 0);
+        draw_->RecordCommandBuffer(scene_.value(), image_idx, current_frame_,
+                                   swapchain.GetVkExtent(), command_buffer.GetVkCommandBuffer());
+    }();
 
     // ImGui
     ImGui::Begin("Stats");
