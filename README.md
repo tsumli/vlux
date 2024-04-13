@@ -8,7 +8,7 @@ You can control camera with
 - W/A/S/D: forward/left/backward/right
 - E/Q: up/down
 - mouse: direction
-  - right-click to enable/disable mouse control (enabled in default)
+  - right-click to enable/disable mouse control (**disabled** in default)
 
 ## Steps
 ### 1. Create docker image
@@ -40,7 +40,7 @@ or you can just use VSCode to launch.
 
 
 ## TODO
-- [x] mouse controlling
+- [x] mouse control
 - [ ] tone mapping
 - [ ] lighting
 - [ ] transparent pass
