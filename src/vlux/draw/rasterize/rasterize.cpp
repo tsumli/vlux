@@ -2,6 +2,7 @@
 
 #include "common/texture_view.h"
 #include "device_resource/device_resource.h"
+#include "pch.h"
 #include "scene/scene.h"
 #include "shader/shader.h"
 #include "texture/texture_sampler.h"
@@ -14,24 +15,64 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     : scene_(scene), transform_ubo_(transform_ubo) {
     const auto device = device_resource.GetDevice().GetVkDevice();
     const auto physical_device = device_resource.GetVkPhysicalDevice();
+
+    // DescriptorSetLayout
+    [&]() {
+        constexpr auto kLayoutBindings = std::to_array({
+            // transform
+            VkDescriptorSetLayoutBinding{
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .pImmutableSamplers = nullptr,
+            },
+            // color
+            VkDescriptorSetLayoutBinding{
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = nullptr,
+            },
+            // normal
+            VkDescriptorSetLayoutBinding{
+                .binding = 2,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = nullptr,
+            },
+        });
+
+        const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+            .pBindings = kLayoutBindings.data(),
+        };
+
+        descriptor_set_layout_.emplace(device, layout_info);
+    }();
+
     // DescriptorPool
     [&]() {
         const auto num_model = static_cast<uint32_t>(scene.GetModels().size());
         const auto pool_sizes = std::to_array({
+            // transform
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model,
             },
+            // color + normal
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 2,
             },
         });
-        const auto pool_size_count = static_cast<uint32_t>(pool_sizes.size());
         const auto pool_info = VkDescriptorPoolCreateInfo{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = num_model * kMaxFramesInFlight,
-            .poolSizeCount = pool_size_count,
+            .maxSets = kMaxFramesInFlight * num_model,
+            .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
             .pPoolSizes = pool_sizes.data(),
         };
         descriptor_pool_.emplace(device, pool_info);
@@ -92,43 +133,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .pDependencies = dependencies.data(),
         };
         render_pass_.emplace(device, render_pass_info);
-    }();
-
-    // DescriptorSetLayout
-    [&]() {
-        constexpr auto kLayoutBindings = std::to_array({
-            // transform
-            VkDescriptorSetLayoutBinding{
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-            // color
-            VkDescriptorSetLayoutBinding{
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-            // normal
-            VkDescriptorSetLayoutBinding{
-                .binding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-        });
-
-        const auto layout_info = VkDescriptorSetLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
-            .pBindings = kLayoutBindings.data(),
-        };
-        descriptor_set_layout_.emplace(device, layout_info);
     }();
 
     // PipelineLayout
@@ -284,44 +288,51 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // DescriptorSets
-    for (const auto& model : scene.GetModels()) {
-        const auto texture_view = [&]() -> std::optional<TextureView> {
-            if (model.GetBaseColorTexture() == nullptr || model.GetNormalTexture() == nullptr) {
-                return std::nullopt;
-            } else {
-                return std::make_optional(TextureView{
-                    .color = model.GetBaseColorTexture()->GetImageView(),
-                    .normal = model.GetNormalTexture()->GetImageView(),
-                });
-            }
-        }();
-        [&]() {
-            const auto layouts = std::vector<VkDescriptorSetLayout>(
-                kMaxFramesInFlight, descriptor_set_layout_->GetVkDescriptorSetLayout());
-
+    [&]() {
+        // allocate descriptor sets
+        descriptor_sets_.resize(kMaxFramesInFlight);
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto descriptor_set_layout = descriptor_set_layout_->GetVkDescriptorSetLayout();
             const auto alloc_info = VkDescriptorSetAllocateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                 .descriptorPool = descriptor_pool_->GetVkDescriptorPool(),
-                .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
-                .pSetLayouts = layouts.data(),
+                .descriptorSetCount = 1,  // only have one descriptor set for each layout
+                .pSetLayouts = &descriptor_set_layout,
             };
-
-            for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-                descriptor_sets_.emplace_back(device, alloc_info, 3);
+            descriptor_sets_.at(frame_i).reserve(scene.GetModels().size());
+            for (size_t model_i = 0; model_i < scene.GetModels().size(); model_i++) {
+                descriptor_sets_.at(frame_i).emplace_back(device, alloc_info);
             }
+        }
 
-            for (size_t frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+        // texture sampler
+        texture_sampler_ = std::make_shared<TextureSampler>(physical_device, device);
+
+        // update descriptor sets
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            for (auto model_i = 0; const auto& model : scene_.GetModels()) {
+                const auto texture_view = [&]() -> std::optional<TextureView> {
+                    if (model.GetBaseColorTexture() == nullptr ||
+                        model.GetNormalTexture() == nullptr) {
+                        return std::nullopt;
+                    } else {
+                        return std::make_optional(TextureView{
+                            .color = model.GetBaseColorTexture()->GetImageView(),
+                            .normal = model.GetNormalTexture()->GetImageView(),
+                        });
+                    }
+                }();
+
+                auto descriptor_write = std::vector<VkWriteDescriptorSet>();
+                // transform
                 const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
                     .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
                     .offset = 0,
                     .range = transform_ubo.GetUniformBufferObjectSize(),
                 };
-
-                auto descriptor_write = std::vector<VkWriteDescriptorSet>();
-                // transform
                 descriptor_write.emplace_back(VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
+                    .dstSet = descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
                     .dstBinding = 0,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
@@ -329,7 +340,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .pBufferInfo = &transform_ubo_buffer_info,
                 });
                 if (texture_view.has_value()) {
-                    texture_sampler_ = std::make_shared<TextureSampler>(physical_device, device);
                     const auto create_image_info = [&](const VkImageView image_view) {
                         return VkDescriptorImageInfo{
                             .sampler = texture_sampler_->GetSampler(),
@@ -342,7 +352,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     const auto color_image_info = create_image_info(texture_view->color);
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet = descriptor_sets_[frame_i].GetVkDescriptorSet(1),
+                        .dstSet = descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
                         .dstBinding = 1,
                         .dstArrayElement = 0,
                         .descriptorCount = 1,
@@ -354,7 +364,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     const auto normal_image_info = create_image_info(texture_view->normal);
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet = descriptor_sets_[frame_i].GetVkDescriptorSet(2),
+                        .dstSet = descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
                         .dstBinding = 2,
                         .dstArrayElement = 0,
                         .descriptorCount = 1,
@@ -364,9 +374,10 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 }
                 vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
                                        descriptor_write.data(), 0, nullptr);
+                model_i++;
             }
-        }();
-    }
+        }
+    }();
 }
 
 void DrawRasterize::RecordCommandBuffer(const Scene& scene, const uint32_t image_idx,
@@ -417,7 +428,8 @@ void DrawRasterize::RecordCommandBuffer(const Scene& scene, const uint32_t image
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    for (std::size_t i = 0; const auto& model : scene.GetModels()) {
+    for (std::size_t model_i = 0;
+         const auto& model : scene.GetModels()) {  // TODO: use range (enumerate)
         const auto vertex_buffers =
             std::vector<VkBuffer>{model.GetVertexBuffers()[0].GetVertexBuffer()};
         const auto offsets = std::vector<VkDeviceSize>{0};
@@ -425,13 +437,13 @@ void DrawRasterize::RecordCommandBuffer(const Scene& scene, const uint32_t image
         vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetIndexBuffer(), 0,
                              VK_INDEX_TYPE_UINT16);
         const auto descriptor_set =
-            std::to_array({descriptor_sets_[i].GetVkDescriptorSet(cur_frame)});
+            std::to_array({descriptor_sets_.at(cur_frame).at(model_i).GetVkDescriptorSet()});
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 pipeline_layout_->GetVkPipelineLayout(), 0, descriptor_set.size(),
                                 descriptor_set.data(), 0, nullptr);
         vkCmdDrawIndexed(command_buffer,
                          static_cast<uint32_t>(model.GetIndexBuffers()[0].GetSize()), 1, 0, 0, 0);
-        i++;
+        model_i++;
     }
 }
 

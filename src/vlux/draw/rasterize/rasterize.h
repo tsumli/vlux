@@ -53,7 +53,7 @@ class DrawRasterize final : public DrawStrategy {
     std::optional<PipelineLayout> pipeline_layout_;
     std::optional<GraphicsPipeline> graphics_pipeline_;
     std::vector<FrameBuffer> framebuffer_;
-    std::vector<DescriptorSets> descriptor_sets_;
+    std::vector<std::vector<DescriptorSets>> descriptor_sets_;
     std::shared_ptr<TextureSampler> texture_sampler_;
 };
 }  // namespace vlux::draw::rasterize
