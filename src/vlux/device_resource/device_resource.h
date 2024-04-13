@@ -4,8 +4,8 @@
 //
 #include "command_buffer.h"
 #include "command_pool.h"
+#include "common/depth_stencil.h"
 #include "debug_messenger.h"
-#include "depth_stencil.h"
 #include "device.h"
 #include "instance.h"
 #include "surface.h"

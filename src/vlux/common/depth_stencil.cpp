@@ -1,5 +1,7 @@
 #include "depth_stencil.h"
 
+#include "image.h"
+
 namespace vlux {
 namespace {
 VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, const VkImageTiling tiling,

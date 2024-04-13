@@ -7,6 +7,7 @@ set(LIB_SRC
     vlux/transform.cpp
     vlux/uniform_buffer.cpp
     vlux/common/buffer.cpp
+    vlux/common/depth_stencil.cpp
     vlux/common/descriptor_pool.cpp
     vlux/common/descriptor_set_layout.cpp
     vlux/common/descriptor_sets.cpp
@@ -21,7 +22,6 @@ set(LIB_SRC
     vlux/device_resource/command_pool.cpp
     vlux/device_resource/command_buffer.cpp
     vlux/device_resource/debug_messenger.cpp
-    vlux/device_resource/depth_stencil.cpp
     vlux/device_resource/device.cpp
     vlux/device_resource/device_resource.cpp
     vlux/device_resource/instance.cpp

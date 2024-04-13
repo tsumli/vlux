@@ -2,8 +2,6 @@
 #define DEPTH_H
 
 #include "pch.h"
-//
-#include "common/image.h"
 
 namespace vlux {
 class DepthStencil {
