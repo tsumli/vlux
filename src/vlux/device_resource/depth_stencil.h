@@ -3,7 +3,7 @@
 
 #include "pch.h"
 //
-#include "image.h"
+#include "common/image.h"
 
 namespace vlux {
 class DepthStencil {

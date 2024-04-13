@@ -1,5 +1,5 @@
-#ifndef TEXTURE_VIEW_H
-#define TEXTURE_VIEW_H
+#ifndef COMMON_TEXTURE_VIEW_H
+#define COMMON_TEXTURE_VIEW_H
 #include "pch.h"
 
 namespace vlux {

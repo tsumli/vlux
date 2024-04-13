@@ -1,5 +1,5 @@
-#ifndef DESCRIPTOR_POOL_H
-#define DESCRIPTOR_POOL_H
+#ifndef COMMON_DESCRIPTOR_POOL_H
+#define COMMON_DESCRIPTOR_POOL_H
 
 #include "pch.h"
 

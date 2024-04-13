@@ -1,5 +1,5 @@
-#ifndef RASTERIZE_GRAPICS_PIPELINE_H
-#define RASTERIZE_GRAPICS_PIPELINE_H
+#ifndef COMMON_GRAPICS_PIPELINE_H
+#define COMMON_GRAPICS_PIPELINE_H
 
 #include <vulkan/vulkan_core.h>
 

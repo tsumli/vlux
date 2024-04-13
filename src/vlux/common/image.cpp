@@ -1,7 +1,7 @@
 #include "image.h"
 
+#include "common/utils.h"
 #include "device_resource/barrier.h"
-#include "device_resource/utils.h"
 
 namespace vlux {
 void CreateImage(const uint32_t width, const uint32_t height, VkFormat format,

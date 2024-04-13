@@ -1,5 +1,5 @@
-#ifndef IMAGE_H
-#define IMAGE_H
+#ifndef COMMON_IMAGE_H
+#define COMMON_IMAGE_H
 
 #include "pch.h"
 

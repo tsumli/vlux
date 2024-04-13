@@ -1,5 +1,5 @@
-#ifndef DESCRIPTOR_SET_LAYOUT_H
-#define DESCRIPTOR_SET_LAYOUT_H
+#ifndef COMMON_DESCRIPTOR_SET_LAYOUT_H
+#define COMMON_DESCRIPTOR_SET_LAYOUT_H
 
 #include <vulkan/vulkan_core.h>
 

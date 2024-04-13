@@ -2,9 +2,9 @@
 
 #include <stdexcept>
 
+#include "common/queue.h"
 #include "control.h"
 #include "device_resource/command_buffer.h"
-#include "device_resource/queue.h"
 #include "draw/rasterize/rasterize.h"
 #include "gui.h"
 #include "imgui.h"
@@ -229,7 +229,7 @@ void App::DrawFrame() {
     const auto wait_stages =
         std::vector<VkPipelineStageFlags>({VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
     const auto signal_semaphores =
-        std::vector<VkSemaphore>({sync_object.GetvluxenderFinishedSemaphore()});
+        std::vector<VkSemaphore>({sync_object.GetVkRenderFinishedSemaphore()});
 
     const auto command_buffers = std::to_array({command_buffer.GetVkCommandBuffer()});
 

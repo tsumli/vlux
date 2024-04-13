@@ -1,6 +1,6 @@
 #include "swapchain.h"
 
-#include "queue.h"
+#include "common/queue.h"
 #include "surface.h"
 
 namespace vlux {

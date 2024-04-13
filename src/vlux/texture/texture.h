@@ -2,9 +2,9 @@
 #define TEXTURE_H
 #include "pch.h"
 //
+#include "common/buffer.h"
+#include "common/image.h"
 #include "device_resource/barrier.h"
-#include "device_resource/buffer.h"
-#include "device_resource/image.h"
 
 namespace vlux {
 class Texture {

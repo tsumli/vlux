@@ -1,5 +1,5 @@
-#ifndef FRAME_BUFFER_H
-#define FRAME_BUFFER_H
+#ifndef COMMON_FRAME_BUFFER_H
+#define COMMON_FRAME_BUFFER_H
 
 #include "pch.h"
 

@@ -3,7 +3,7 @@
 
 #include "pch.h"
 //
-#include "device_resource/buffer.h"
+#include "common/buffer.h"
 
 namespace vlux {
 using Index = uint16_t;
