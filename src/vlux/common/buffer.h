@@ -1,5 +1,5 @@
-#ifndef BUFFER_H
-#define BUFFER_H
+#ifndef COMMON_BUFFER_H
+#define COMMON_BUFFER_H
 
 #include "pch.h"
 //

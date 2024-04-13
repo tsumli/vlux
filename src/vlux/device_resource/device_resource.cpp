@@ -1,6 +1,6 @@
 #include "device_resource.h"
 
-#include "queue.h"
+#include "common/queue.h"
 #include "swapchain.h"
 
 namespace vlux {

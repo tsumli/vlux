@@ -12,7 +12,7 @@ class SyncObject {
 
     // accessor
     VkSemaphore GetVkImageAvailableSemaphore() const { return image_available_semaphore_; }
-    VkSemaphore GetvluxenderFinishedSemaphore() const { return render_finished_semaphore_; }
+    VkSemaphore GetVkRenderFinishedSemaphore() const { return render_finished_semaphore_; }
     VkFence GetVkInFlightFence() const { return in_flight_fence_; }
 
     // methods

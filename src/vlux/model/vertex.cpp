@@ -1,6 +1,6 @@
 #include "vertex.h"
 
-#include "device_resource/buffer.h"
+#include "common/buffer.h"
 
 namespace vlux {
 VertexBuffer::VertexBuffer(const VkDevice device, const VkPhysicalDevice physical_device,

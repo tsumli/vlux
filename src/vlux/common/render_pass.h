@@ -1,5 +1,5 @@
-#ifndef RENDER_PASS_H
-#define RENDER_PASS_H
+#ifndef COMMON_RENDER_PASS_H
+#define COMMON_RENDER_PASS_H
 
 #include "pch.h"
 

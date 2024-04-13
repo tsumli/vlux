@@ -1,6 +1,6 @@
 #include "gltf.h"
 
-#include "../device_resource/image.h"
+#include "common/image.h"
 
 namespace vlux {
 

@@ -1,5 +1,5 @@
-#ifndef QUEUE_H
-#define QUEUE_H
+#ifndef COMMON_QUEUE_H
+#define COMMON_QUEUE_H
 #include "pch.h"
 
 namespace vlux {

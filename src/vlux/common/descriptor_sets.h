@@ -1,5 +1,5 @@
-#ifndef DESCRIPTOR_SET_H
-#define DESCRIPTOR_SET_H
+#ifndef COMMON_DESCRIPTOR_SET_H
+#define COMMON_DESCRIPTOR_SET_H
 
 #include "pch.h"
 

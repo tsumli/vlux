@@ -1,7 +1,8 @@
 #ifndef DEVICE_H
 #define DEVICE_H
 #include "pch.h"
-#include "queue.h"
+//
+#include "common/queue.h"
 
 namespace vlux {
 bool CheckDeviceExtensionSupport(VkPhysicalDevice physical_device);

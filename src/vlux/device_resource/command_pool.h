@@ -2,7 +2,7 @@
 #define COMMAND_POOL_H
 #include "pch.h"
 //
-#include "queue.h"
+#include "common/queue.h"
 
 namespace vlux {
 class CommandPool {
