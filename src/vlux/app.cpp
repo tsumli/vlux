@@ -7,6 +7,7 @@
 #include "device_resource/queue.h"
 #include "draw/rasterize/rasterize.h"
 #include "gui.h"
+#include "imgui.h"
 #include "model/gltf.h"
 #include "model/model.h"
 #include "uniform_buffer.h"
@@ -206,7 +207,15 @@ void App::DrawFrame() {
     ImGui::Text("camera pos: (%f, %f, %f)", pos.x, pos.y, pos.z);
     const auto rot = camera_->GetRotation();
     ImGui::Text("camera rot: (%f, %f)", rot.x, rot.y);
+    ImGui::Text("Mouse cursor: %s", mouse_right_button_state_ == MouseRightButtonState::kTriggered
+                                        ? "enabled"
+                                        : "disabled");
     ImGui::End();
+
+    ImGui::Begin("Control");
+    ImGui::InputFloat("Mouse sens", &mouse_config_.sens);
+    ImGui::End();
+
     gui_->Render(command_buffer.GetVkCommandBuffer());
 
     // finalize
