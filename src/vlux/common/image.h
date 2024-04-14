@@ -19,9 +19,6 @@ void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_
                        const uint32_t height, const VkQueue graphics_queue,
                        const VkCommandPool command_pool, const VkDevice device);
 
-void TransitionImageLayout(const VkCommandBuffer command_buffer, const VkImage image,
-                           const VkImageLayout old_layout, const VkImageLayout new_layout);
-
 class Image {
    public:
     Image(const std::filesystem::path& path) {

@@ -47,8 +47,6 @@ class App {
     // Draw
     std::unique_ptr<draw::DrawStrategy> draw_ = nullptr;
 
-    int current_frame_ = 0;
-
     // frame timer
     FrameTimer frame_timer_;
 };

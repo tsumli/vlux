@@ -1,5 +1,7 @@
 #include "gui.h"
 
+#include <vulkan/vulkan_core.h>
+
 namespace vlux {
 static void CheckVkResult(const VkResult err) {
     if (err == 0) return;

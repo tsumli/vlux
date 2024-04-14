@@ -2,6 +2,8 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <ctime>
+
 #include "common/texture_view.h"
 #include "common/utils.h"
 #include "device_resource/device_resource.h"
@@ -478,17 +480,9 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 }
 
-void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx, const uint32_t cur_frame,
+void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
                                         const VkExtent2D& swapchain_extent,
                                         const VkCommandBuffer command_buffer) {
-    const auto begin_info = VkCommandBufferBeginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    };
-
-    if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
-        throw std::runtime_error("failed to begin recording command buffer!");
-    }
-
     constexpr auto kClearValues = std::to_array<VkClearValue>({
         // Color
         {
@@ -551,13 +545,14 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx, const uint32_t
         vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetIndexBuffer(), 0,
                              VK_INDEX_TYPE_UINT16);
         const auto descriptor_set =
-            std::to_array({descriptor_sets_.at(cur_frame).at(model_i).GetVkDescriptorSet()});
+            std::to_array({descriptor_sets_.at(image_idx).at(model_i).GetVkDescriptorSet()});
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 pipeline_layout_->GetVkPipelineLayout(), 0, descriptor_set.size(),
                                 descriptor_set.data(), 0, nullptr);
         vkCmdDrawIndexed(command_buffer,
                          static_cast<uint32_t>(model.GetIndexBuffers()[0].GetSize()), 1, 0, 0, 0);
     }
+    vkCmdEndRenderPass(command_buffer);
 }
 
 void DrawRasterize::OnRecreateSwapChain([[maybe_unused]] const DeviceResource& device_resource) {}

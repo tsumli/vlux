@@ -1,5 +1,7 @@
 #ifndef IMGUI_H
 #define IMGUI_H
+#include <vulkan/vulkan_core.h>
+
 #include "pch.h"
 //
 #include "imgui.h"

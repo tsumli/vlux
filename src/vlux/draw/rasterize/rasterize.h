@@ -29,12 +29,14 @@ class DrawRasterize final : public DrawStrategy {
                   const DeviceResource& device_resource);
     ~DrawRasterize() override = default;
 
-    void RecordCommandBuffer(const uint32_t image_idx, const uint32_t cur_frame,
-                             const VkExtent2D& swapchain_extent,
+    VkRenderPass GetRenderPass() const override { return render_pass_.value().GetVkRenderPass(); }
+    VkFramebuffer GetFramebuffer(const size_t idx) const override {
+        return framebuffer_.at(idx).GetVkFrameBuffer();
+    }
+    void RecordCommandBuffer(const uint32_t image_idx, const VkExtent2D& swapchain_extent,
                              const VkCommandBuffer command_buffer) override;
 
     void OnRecreateSwapChain(const DeviceResource& device_resource) override;
-    VkRenderPass GetVkRenderPass() const override { return render_pass_->GetVkRenderPass(); }
     const RenderTarget& GetOutputRenderTarget() const override {
         return render_targets_.at(RenderTargetType::kColor).value();
     }

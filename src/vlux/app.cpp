@@ -2,12 +2,10 @@
 
 #include <vulkan/vulkan_core.h>
 
-#include <stdexcept>
-
-#include "common/image.h"
 #include "common/queue.h"
 #include "control.h"
 #include "device_resource/command_buffer.h"
+#include "device_resource/device.h"
 #include "draw/rasterize/rasterize.h"
 #include "gui.h"
 #include "imgui.h"
@@ -45,7 +43,7 @@ App::App(DeviceResource& device_resource)
         .window = device_resource_.GetGLFWwindow(),
         .queue_family = queue_family.graphics_family.value(),
         .queue = device_resource_.GetGraphicsQueue(),
-        .render_pass = draw_->GetVkRenderPass(),
+        .render_pass = draw_->GetRenderPass(),
         .image_count = device_resource_.GetSwapchain().GetImageCount(),
     };
     gui_.emplace(gui_input);
@@ -150,6 +148,7 @@ void App::DrawFrame() {
             throw std::runtime_error("failed to acquire swap chain image!");
         }
     }
+    spdlog::debug("image_idx: {}", image_idx);
 
     spdlog::debug("input");
     [&]() {
@@ -193,13 +192,19 @@ void App::DrawFrame() {
     spdlog::debug("update ubo");
     [&]() {
         auto transform = camera_->CreateTransformParams();
-        transform_ubo_.UpdateUniformBuffer(transform, current_frame_);
+        transform_ubo_.UpdateUniformBuffer(transform, image_idx);
     }();
 
     spdlog::debug("draw frame");
     [&]() {
         vkResetCommandBuffer(command_buffer.GetVkCommandBuffer(), 0);
-        draw_->RecordCommandBuffer(image_idx, current_frame_, swapchain.GetVkExtent(),
+        const auto begin_info = VkCommandBufferBeginInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        };
+        if (vkBeginCommandBuffer(command_buffer.GetVkCommandBuffer(), &begin_info) != VK_SUCCESS) {
+            throw std::runtime_error("failed to begin recording command buffer!");
+        }
+        draw_->RecordCommandBuffer(image_idx, swapchain.GetVkExtent(),
                                    command_buffer.GetVkCommandBuffer());
     }();
 
@@ -208,14 +213,55 @@ void App::DrawFrame() {
     // Write Swapchain
     spdlog::debug("write swapchain");
     [&]() {
-        // TransitionImageLayout(
-        //     command_buffer.GetVkCommandBuffer(), output_render_target.GetVkImage(),
-        //     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-        // TransitionImageLayout(command_buffer.GetVkCommandBuffer(),
-        //                       device_resource_.GetSwapchain().GetVkImages().at(image_idx),
-        //                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        //                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        // Transition Image Layout
+        [&]() {
+            // output_render_target
+            const auto barrier = VkImageMemoryBarrier{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = 0,
+                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = output_render_target.GetVkImage(),
+                .subresourceRange =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+            };
+            vkCmdPipelineBarrier(
+                command_buffer.GetVkCommandBuffer(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        }();
+        [&]() {
+            // Swapchain
+            const auto barrier = VkImageMemoryBarrier{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = 0,
+                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
+                .subresourceRange =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+            };
+            vkCmdPipelineBarrier(
+                command_buffer.GetVkCommandBuffer(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        }();
 
         const auto image_copy = VkImageCopy{
             .srcSubresource =
@@ -237,15 +283,98 @@ void App::DrawFrame() {
         };
         vkCmdCopyImage(command_buffer.GetVkCommandBuffer(), output_render_target.GetVkImage(),
                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain.GetVkImages().at(image_idx),
-                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 1, &image_copy);
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
 
-        // TransitionImageLayout(command_buffer.GetVkCommandBuffer(),
-        //                       device_resource_.GetSwapchain().GetVkImages().at(image_idx),
-        //                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        //                       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        // Transition Image Layout
+        [&]() {
+            // output_render_target
+            const auto barrier = VkImageMemoryBarrier{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .dstAccessMask = 0,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = output_render_target.GetVkImage(),
+                .subresourceRange =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+            };
+            vkCmdPipelineBarrier(command_buffer.GetVkCommandBuffer(),
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
+                                 nullptr, 1, &barrier);
+        }();
+        [&]() {
+            // Swapchain
+            const auto barrier = VkImageMemoryBarrier{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .dstAccessMask = 0,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
+                .subresourceRange =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+            };
+            vkCmdPipelineBarrier(command_buffer.GetVkCommandBuffer(),
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
+                                 nullptr, 1, &barrier);
+        }();
     }();
 
     // ImGui
+    [&]() {
+        constexpr auto kClearValues = std::to_array<VkClearValue>({
+            // Color
+            {
+                .color =
+                    {
+                        {0.0f, 0.0f, 0.0f, 1.0f},
+                    },
+            },
+            // Normal
+            {
+                .color =
+                    {
+                        {0.0f, 0.0f, 0.0f, 1.0f},
+                    },
+            },
+            // Depth Stencil
+            {
+                .depthStencil = {1.0f, 0},
+            },
+        });
+        const auto render_pass_info = VkRenderPassBeginInfo{
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass = draw_->GetRenderPass(),
+            .framebuffer = draw_->GetFramebuffer(image_idx),
+            .renderArea =
+                {
+                    .offset = {0, 0},
+                    .extent = device_resource_.GetSwapchain().GetVkExtent(),
+                },
+            .clearValueCount = static_cast<uint32_t>(kClearValues.size()),
+            .pClearValues = kClearValues.data(),
+        };
+        vkCmdBeginRenderPass(command_buffer.GetVkCommandBuffer(), &render_pass_info,
+                             VK_SUBPASS_CONTENTS_INLINE);
+    }();
     ImGui::Begin("Stats");
     ImGui::Text("fps: %f", frame_timer_.GetFPS());
     const auto pos = camera_->GetPosition();
@@ -260,11 +389,10 @@ void App::DrawFrame() {
     ImGui::Begin("Control");
     ImGui::InputFloat("Mouse sens", &mouse_config_.sens);
     ImGui::End();
-
     gui_->Render(command_buffer.GetVkCommandBuffer());
-
-    // finalize
     vkCmdEndRenderPass(command_buffer.GetVkCommandBuffer());
+
+    spdlog::debug("end command buffer");
     if (vkEndCommandBuffer(command_buffer.GetVkCommandBuffer()) != VK_SUCCESS) {
         throw std::runtime_error("failed to record command buffer!");
     }
@@ -304,7 +432,6 @@ void App::DrawFrame() {
         .pImageIndices = &image_idx,
     };
     vkQueuePresentKHR(device_resource_.GetPresentQueue(), &present_info);
-    current_frame_ = (current_frame_ + 1) % kMaxFramesInFlight;
 }
 
 }  // namespace vlux
