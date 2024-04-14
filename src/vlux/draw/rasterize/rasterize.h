@@ -1,12 +1,9 @@
 #ifndef DRAW_RASTERIZE_H
 #define DRAW_RASTERIZE_H
 
-#include <vulkan/vulkan_core.h>
-
-#include <unordered_map>
-
 #include "pch.h"
 //
+#include "common/compute_pipeline.h"
 #include "common/descriptor_pool.h"
 #include "common/descriptor_set_layout.h"
 #include "common/descriptor_sets.h"
@@ -38,7 +35,7 @@ class DrawRasterize final : public DrawStrategy {
 
     void OnRecreateSwapChain(const DeviceResource& device_resource) override;
     const RenderTarget& GetOutputRenderTarget() const override {
-        return render_targets_.at(RenderTargetType::kColor).value();
+        return render_targets_.at(RenderTargetType::kFinalized).value();
     }
 
    private:
@@ -46,16 +43,24 @@ class DrawRasterize final : public DrawStrategy {
     const UniformBuffer<TransformParams>& transform_ubo_;
 
     std::optional<RenderPass> render_pass_;
-    std::optional<DescriptorSetLayout> descriptor_set_layout_;
-    std::optional<DescriptorPool> descriptor_pool_;
-    std::optional<PipelineLayout> pipeline_layout_;
+
+    std::optional<DescriptorPool> graphics_descriptor_pool_;
+    std::vector<std::vector<DescriptorSets>> graphics_descriptor_sets_;
+    std::optional<DescriptorSetLayout> graphics_descriptor_set_layout_;
+    std::optional<PipelineLayout> graphics_pipeline_layout_;
     std::optional<GraphicsPipeline> graphics_pipeline_;
+
+    std::optional<DescriptorPool> compute_descriptor_pool_;
+    std::vector<DescriptorSets> compute_descriptor_sets_;
+    std::optional<DescriptorSetLayout> compute_descriptor_set_layout_;
+    std::optional<PipelineLayout> compute_pipeline_layout_;
+    std::optional<ComputePipeline> compute_pipeline_;
+
     std::vector<FrameBuffer> framebuffer_;
-    std::vector<std::vector<DescriptorSets>> descriptor_sets_;
     std::shared_ptr<TextureSampler> texture_sampler_;
 
     // render targets
-    enum class RenderTargetType { kColor, kNormal, kDepthStencil, kCount };
+    enum class RenderTargetType { kColor, kNormal, kDepthStencil, kFinalized, kCount };
     std::unordered_map<RenderTargetType, std::optional<RenderTarget>> render_targets_;
 };
 }  // namespace vlux::draw::rasterize

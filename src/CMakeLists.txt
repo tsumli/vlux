@@ -9,6 +9,7 @@ set(LIB_SRC
     vlux/common/buffer.cpp
     vlux/common/command_buffer.cpp
     vlux/common/command_pool.cpp
+    vlux/common/compute_pipeline.cpp
     vlux/common/descriptor_pool.cpp
     vlux/common/descriptor_set_layout.cpp
     vlux/common/descriptor_sets.cpp

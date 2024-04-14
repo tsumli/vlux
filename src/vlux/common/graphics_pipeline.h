@@ -1,8 +1,6 @@
 #ifndef COMMON_GRAPICS_PIPELINE_H
 #define COMMON_GRAPICS_PIPELINE_H
 
-#include <vulkan/vulkan_core.h>
-
 #include "pch.h"
 
 namespace vlux {

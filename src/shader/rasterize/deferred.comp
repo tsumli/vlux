@@ -1,14 +1,15 @@
 #version 460
-layout(local_size_x = 1, local_size_y = 1) in;
 
-layout(rgba32f, binding = 0) uniform image2D image;
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout(rgba32f, binding = 0) uniform readonly image2D color;
+layout(rgba32f, binding = 1) uniform readonly image2D normal;
+layout(rgba32f, binding = 2) uniform image2D result;
 
 void main() {
-  ivec2 gidx = ivec2(gl_GlobalInvocationID.xy);
-  ivec2 size = imageSize(image);
-
-  vec2 uv = vec2(gidx) / vec2(size);
-  vec4 color = vec4(uv, 0.0, 1.0);
-
-  imageStore(image, gidx, color);
+  if (gl_GlobalInvocationID.x >= imageSize(result).x || gl_GlobalInvocationID.y >= imageSize(result).y) {
+    return;
+  }
+  vec4 pixel_color = imageLoad(color, ivec2(gl_GlobalInvocationID.xy));
+  imageStore(result, ivec2(gl_GlobalInvocationID.xy), pixel_color);
 }

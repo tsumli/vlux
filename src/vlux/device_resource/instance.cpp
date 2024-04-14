@@ -11,17 +11,15 @@ std::vector<const char*> GetRequiredExtensions() {
     if (!kValidationLayers.empty()) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
-    // extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-    // extensions.push_back("VK_KHR_get_physical_device_properties2");
     return extensions;
 }
 
 Instance::Instance() {
     const auto app_info = VkApplicationInfo{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "Hello Triangle",
+        .pApplicationName = "Vlux",
         .applicationVersion = VK_MAKE_VERSION(0, 0, 0),
-        .pEngineName = "No Engine",
+        .pEngineName = "Vlux Engine",
         .engineVersion = VK_MAKE_VERSION(0, 0, 0),
         .apiVersion = VK_API_VERSION_1_0,
     };
@@ -35,7 +33,7 @@ Instance::Instance() {
                 kValidationLayers.empty()
                     ? nullptr
                     : static_cast<const VkDebugUtilsMessengerCreateInfoEXT*>(&debug_create_info),
-            .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+            .flags = 0,
             .pApplicationInfo = &app_info,
             .enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size()),
             .ppEnabledLayerNames = kValidationLayers.data(),
