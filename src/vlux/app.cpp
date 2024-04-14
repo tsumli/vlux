@@ -18,8 +18,15 @@ App::App(DeviceResource& device_resource)
     : device_resource_(device_resource),
       transform_ubo_(device_resource_.GetDevice().GetVkDevice(),
                      device_resource_.GetVkPhysicalDevice()) {
+    const auto device = device_resource_.GetDevice().GetVkDevice();
+    const auto physical_device = device_resource_.GetVkPhysicalDevice();
+
     // setup logger lovel
     spdlog::set_level(spdlog::level::debug);
+
+    // Resource Creation
+    command_pool_.emplace(device, physical_device, device_resource_.GetSurface().GetVkSurface());
+    command_buffer_.emplace(command_pool_->GetVkCommandPool(), device);
 
     // Create Scene
     CreateScene();
@@ -38,13 +45,14 @@ App::App(DeviceResource& device_resource)
                                                 device_resource_.GetSurface().GetVkSurface());
     const auto gui_input = GuiInput{
         .instance = device_resource_.GetInstance().GetVkInstance(),
-        .device = device_resource_.GetDevice().GetVkDevice(),
-        .physical_device = device_resource_.GetVkPhysicalDevice(),
+        .device = device,
+        .physical_device = physical_device,
         .window = device_resource_.GetGLFWwindow(),
         .queue_family = queue_family.graphics_family.value(),
         .queue = device_resource_.GetGraphicsQueue(),
-        .render_pass = draw_->GetRenderPass(),
         .image_count = device_resource_.GetSwapchain().GetImageCount(),
+        .swapchain_format = device_resource_.GetSwapchain().GetVkFormat(),
+        .swapchain_image_views = device_resource_.GetSwapchain().GetVkImageViews(),
     };
     gui_.emplace(gui_input);
 }
@@ -53,6 +61,10 @@ App::~App() {}
 
 void App::CreateScene() {
     spdlog::debug("create scene");
+    const auto device = device_resource_.GetDevice().GetVkDevice();
+    const auto physical_device = device_resource_.GetVkPhysicalDevice();
+    const auto command_pool = command_pool_->GetVkCommandPool();
+    const auto graphics_queue = device_resource_.GetGraphicsQueue();
 
     auto models = std::vector<Model>();
 
@@ -92,20 +104,14 @@ void App::CreateScene() {
         for (const auto& mesh : gltf_model.meshes) {
             for (const auto& primitive : mesh.primitives) {
                 auto [indices, vertices, base_color_texture, normal_texture] =
-                    LoadGltfObjects(primitive, gltf_model, device_resource_.GetGraphicsQueue(),
-                                    device_resource_.GetCommandPool().GetVkCommandPool(),
-                                    device_resource_.GetVkPhysicalDevice(),
-                                    device_resource_.GetDevice().GetVkDevice(), 0.1f);
+                    LoadGltfObjects(primitive, gltf_model, graphics_queue, command_pool,
+                                    physical_device, device, 0.1f);
                 auto vertex_buffers = std::vector<VertexBuffer>();
-                vertex_buffers.emplace_back(
-                    device_resource_.GetDevice().GetVkDevice(),
-                    device_resource_.GetVkPhysicalDevice(), device_resource_.GetGraphicsQueue(),
-                    device_resource_.GetCommandPool().GetVkCommandPool(), std::move(vertices));
+                vertex_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
+                                            std::move(vertices));
                 auto index_buffers = std::vector<IndexBuffer>();
-                index_buffers.emplace_back(
-                    device_resource_.GetDevice().GetVkDevice(),
-                    device_resource_.GetVkPhysicalDevice(), device_resource_.GetGraphicsQueue(),
-                    device_resource_.GetCommandPool().GetVkCommandPool(), std::move(indices));
+                index_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
+                                           std::move(indices));
                 auto model = Model(std::move(vertex_buffers), std::move(index_buffers),
                                    std::move(base_color_texture), std::move(normal_texture));
                 models.emplace_back(std::move(model));
@@ -128,17 +134,17 @@ void App::DrawFrame() {
     // on init
     gui_->OnStart();
     frame_timer_.Update();
-    const auto& device = device_resource_.GetDevice();
+    const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto& sync_object = device_resource_.GetSyncObject();
     const auto& swapchain = device_resource_.GetSwapchain();
-    const auto& command_buffer = device_resource_.GetCommandBuffer();
+    const auto command_buffer = command_buffer_->GetVkCommandBuffer();
 
     sync_object.WaitAndResetFences();
 
     uint32_t image_idx;
     {
-        auto result = vkAcquireNextImageKHR(device.GetVkDevice(), swapchain.GetVkSwapchain(),
-                                            UINT64_MAX, sync_object.GetVkImageAvailableSemaphore(),
+        auto result = vkAcquireNextImageKHR(device, swapchain.GetVkSwapchain(), UINT64_MAX,
+                                            sync_object.GetVkImageAvailableSemaphore(),
                                             VK_NULL_HANDLE, &image_idx);
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
             device_resource_.RecreateSwapChain();
@@ -196,15 +202,14 @@ void App::DrawFrame() {
 
     spdlog::debug("draw frame");
     [&]() {
-        vkResetCommandBuffer(command_buffer.GetVkCommandBuffer(), 0);
+        vkResetCommandBuffer(command_buffer, 0);
         const auto begin_info = VkCommandBufferBeginInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         };
-        if (vkBeginCommandBuffer(command_buffer.GetVkCommandBuffer(), &begin_info) != VK_SUCCESS) {
+        if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
             throw std::runtime_error("failed to begin recording command buffer!");
         }
-        draw_->RecordCommandBuffer(image_idx, swapchain.GetVkExtent(),
-                                   command_buffer.GetVkCommandBuffer());
+        draw_->RecordCommandBuffer(image_idx, swapchain.GetVkExtent(), command_buffer);
     }();
 
     const auto& output_render_target = draw_->GetOutputRenderTarget();
@@ -233,9 +238,9 @@ void App::DrawFrame() {
                         .layerCount = 1,
                     },
             };
-            vkCmdPipelineBarrier(
-                command_buffer.GetVkCommandBuffer(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                                 &barrier);
         }();
         [&]() {
             // Swapchain
@@ -257,9 +262,9 @@ void App::DrawFrame() {
                         .layerCount = 1,
                     },
             };
-            vkCmdPipelineBarrier(
-                command_buffer.GetVkCommandBuffer(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                                 &barrier);
         }();
 
         const auto image_copy = VkImageCopy{
@@ -280,7 +285,7 @@ void App::DrawFrame() {
                     .depth = 1,
                 },
         };
-        vkCmdCopyImage(command_buffer.GetVkCommandBuffer(), output_render_target.GetVkImage(),
+        vkCmdCopyImage(command_buffer, output_render_target.GetVkImage(),
                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain.GetVkImages().at(image_idx),
                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
 
@@ -305,8 +310,7 @@ void App::DrawFrame() {
                         .layerCount = 1,
                     },
             };
-            vkCmdPipelineBarrier(command_buffer.GetVkCommandBuffer(),
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
                                  nullptr, 1, &barrier);
         }();
@@ -330,67 +334,33 @@ void App::DrawFrame() {
                         .layerCount = 1,
                     },
             };
-            vkCmdPipelineBarrier(command_buffer.GetVkCommandBuffer(),
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
                                  nullptr, 1, &barrier);
         }();
     }();
 
     // ImGui
+    spdlog::debug("imgui pass");
     [&]() {
-        constexpr auto kClearValues = std::to_array<VkClearValue>({
-            // Color
-            {
-                .color =
-                    {
-                        {0.0f, 0.0f, 0.0f, 1.0f},
-                    },
-            },
-            // Normal
-            {
-                .color =
-                    {
-                        {0.0f, 0.0f, 0.0f, 1.0f},
-                    },
-            },
-            // Depth Stencil
-            {
-                .depthStencil = {1.0f, 0},
-            },
-        });
-        const auto render_pass_info = VkRenderPassBeginInfo{
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .renderPass = draw_->GetRenderPass(),
-            .framebuffer = draw_->GetFramebuffer(image_idx),
-            .renderArea =
-                {
-                    .offset = {0, 0},
-                    .extent = device_resource_.GetSwapchain().GetVkExtent(),
-                },
-            .clearValueCount = static_cast<uint32_t>(kClearValues.size()),
-            .pClearValues = kClearValues.data(),
-        };
-        vkCmdBeginRenderPass(command_buffer.GetVkCommandBuffer(), &render_pass_info,
-                             VK_SUBPASS_CONTENTS_INLINE);
+        ImGui::Begin("Stats");
+        ImGui::Text("fps: %f", frame_timer_.GetFPS());
+        const auto pos = camera_->GetPosition();
+        ImGui::Text("camera pos: (%f, %f, %f)", pos.x, pos.y, pos.z);
+        const auto rot = camera_->GetRotation();
+        ImGui::Text("camera rot: (%f, %f)", rot.x, rot.y);
+        ImGui::Text("Mouse cursor: %s",
+                    mouse_right_button_state_ == MouseRightButtonState::kTriggered ? "enabled"
+                                                                                   : "disabled");
+        ImGui::End();
+
+        ImGui::Begin("Control");
+        ImGui::InputFloat("Mouse sens", &mouse_config_.sens);
+        ImGui::End();
+        gui_->Render(command_buffer, swapchain.GetWidth(), swapchain.GetHeight(), image_idx);
     }();
-    ImGui::Begin("Stats");
-    ImGui::Text("fps: %f", frame_timer_.GetFPS());
-    const auto pos = camera_->GetPosition();
-    ImGui::Text("camera pos: (%f, %f, %f)", pos.x, pos.y, pos.z);
-    const auto rot = camera_->GetRotation();
-    ImGui::Text("camera rot: (%f, %f)", rot.x, rot.y);
-    ImGui::Text("Mouse cursor: %s", mouse_right_button_state_ == MouseRightButtonState::kTriggered
-                                        ? "enabled"
-                                        : "disabled");
-    ImGui::End();
 
-    ImGui::Begin("Control");
-    ImGui::InputFloat("Mouse sens", &mouse_config_.sens);
-    ImGui::End();
-    gui_->Render(command_buffer.GetVkCommandBuffer());
-    vkCmdEndRenderPass(command_buffer.GetVkCommandBuffer());
-
+    // Transition Swapchain Layout
     [&]() {
         // Swapchain
         const auto barrier = VkImageMemoryBarrier{
@@ -411,13 +381,13 @@ void App::DrawFrame() {
                     .layerCount = 1,
                 },
         };
-        vkCmdPipelineBarrier(
-            command_buffer.GetVkCommandBuffer(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
+                             nullptr, 1, &barrier);
     }();
 
     spdlog::debug("end command buffer");
-    if (vkEndCommandBuffer(command_buffer.GetVkCommandBuffer()) != VK_SUCCESS) {
+    if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
         throw std::runtime_error("failed to record command buffer!");
     }
 
@@ -428,7 +398,7 @@ void App::DrawFrame() {
     const auto signal_semaphores =
         std::vector<VkSemaphore>({sync_object.GetVkRenderFinishedSemaphore()});
 
-    const auto command_buffers = std::to_array({command_buffer.GetVkCommandBuffer()});
+    const auto command_buffers = std::to_array({command_buffer});
 
     const auto submit_info = VkSubmitInfo{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,

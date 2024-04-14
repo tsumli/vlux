@@ -4,6 +4,8 @@
 #include "pch.h"
 
 namespace vlux {
+std::pair<int, int> GetWindowSize(GLFWwindow* window);
+
 VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, const VkImageTiling tiling,
                              const VkFormatFeatureFlags features,
                              const VkPhysicalDevice physical_device);

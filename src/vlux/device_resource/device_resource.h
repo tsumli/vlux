@@ -2,8 +2,6 @@
 #define DEVICE_RESOURCE_H
 #include "pch.h"
 //
-#include "common/command_buffer.h"
-#include "common/command_pool.h"
 #include "debug_messenger.h"
 #include "device.h"
 #include "instance.h"
@@ -58,18 +56,6 @@ class DeviceResource {
         }
         return swapchain_.value();
     }
-    const CommandBuffer& GetCommandBuffer() const {
-        if (!command_buffer_.has_value()) {
-            throw std::runtime_error("`DeviceResource::command_buffer_` has no values.");
-        }
-        return command_buffer_.value();
-    }
-    const CommandPool& GetCommandPool() const {
-        if (!command_pool_.has_value()) {
-            throw std::runtime_error("`DeviceResource::command_pool_` has no values.");
-        }
-        return command_pool_.value();
-    }
     const VkQueue& GetGraphicsQueue() const {
         if (graphics_queue_ == VK_NULL_HANDLE) {
             throw std::runtime_error("`DeviceResource::graphics_queue_ == `VK_NULL_HANDLE`");
@@ -113,8 +99,6 @@ class DeviceResource {
     std::optional<Surface> surface_ = std::nullopt;
     std::optional<Swapchain> swapchain_ = std::nullopt;
     std::optional<DebugMessenger> debug_messenger_ = std::nullopt;
-    std::optional<CommandPool> command_pool_ = std::nullopt;
-    std::optional<CommandBuffer> command_buffer_ = std::nullopt;
     std::optional<SyncObject> sync_object_ = std::nullopt;
 };
 }  // namespace vlux
