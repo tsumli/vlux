@@ -1,12 +1,14 @@
 #ifndef IMGUI_H
 #define IMGUI_H
-#include <vulkan/vulkan_core.h>
 
 #include "pch.h"
 //
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+//
+#include "common/command_buffer.h"
+#include "common/render_pass.h"
 
 namespace vlux {
 [[maybe_unused]] static bool IsExtensionAvailable(const ImVector<VkExtensionProperties>& properties,

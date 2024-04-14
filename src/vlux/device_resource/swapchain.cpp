@@ -59,8 +59,6 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
         // return image_count;
         return kMaxFramesInFlight;
     }();
-    spdlog::debug("image_count: {}", image_count_);
-    std::cout << "image_count: " << image_count_ << std::endl;
 
     const auto indices = FindQueueFamilies(physical_device, surface);
     const auto queue_family_indices =

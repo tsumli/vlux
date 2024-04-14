@@ -2,8 +2,8 @@
 #define DEVICE_RESOURCE_H
 #include "pch.h"
 //
-#include "command_buffer.h"
-#include "command_pool.h"
+#include "common/command_buffer.h"
+#include "common/command_pool.h"
 #include "debug_messenger.h"
 #include "device.h"
 #include "instance.h"

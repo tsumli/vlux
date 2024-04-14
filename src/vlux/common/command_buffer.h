@@ -1,5 +1,5 @@
-#ifndef COMMAND_BUFFER_H
-#define COMMAND_BUFFER_H
+#ifndef COMMON_COMMAND_BUFFER_H
+#define COMMON_COMMAND_BUFFER_H
 #include "pch.h"
 
 namespace vlux {
