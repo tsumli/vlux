@@ -319,7 +319,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
             },
-
             // Normal
             VkPipelineColorBlendAttachmentState{
                 .blendEnable = VK_FALSE,
@@ -376,7 +375,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .subpass = 0,
             .basePipelineHandle = VK_NULL_HANDLE,
         };
-
         graphics_pipeline_.emplace(device, pipeline_info);
     }();
 
