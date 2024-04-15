@@ -44,9 +44,7 @@ or you can just use VSCode to launch.
 - [ ] Deferred rendering
   - [x] Multi render targets 
   - [ ] Lighting (Blinn Phong)
-- [ ] Post processes  
-  - [x] Gamma correction
-  - [ ] Tone mapping
+- [x] Gamma correction
 - [ ] Cubemap
 - [ ] Screen space ambient occlusion
 - [ ] Transparent pass
