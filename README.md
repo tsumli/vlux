@@ -43,15 +43,19 @@ or you can just use VSCode to launch.
 - [x] Compute shader
 - [ ] Deferred rendering
   - [x] Multi render targets 
-  - [ ] Lighting
+  - [ ] Lighting (Blinn Phong)
 - [ ] Post processes  
   - [x] Gamma correction
   - [ ] Tone mapping
+- [ ] Cubemap
+- [ ] Screen space ambient occlusion
 - [ ] Transparent pass
 - [ ] Use config file
+- [ ] Reflection
 - [ ] Cubemap
 - [ ] Reflection
 - [ ] Shadow
 - [ ] LOD
+- [ ] Displacement mapping
 - [ ] Raytracing
 - [ ] Mesh shader
