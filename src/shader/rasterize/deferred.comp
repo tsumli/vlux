@@ -11,5 +11,6 @@ void main() {
     return;
   }
   vec4 pixel_color = imageLoad(color, ivec2(gl_GlobalInvocationID.xy));
+  pixel_color = pow(pixel_color, vec4(0.45));  // gamma correction
   imageStore(result, ivec2(gl_GlobalInvocationID.xy), pixel_color);
 }

@@ -175,17 +175,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             },
-            // Finalized
-            VkAttachmentDescription{
-                .format = render_targets_.at(RenderTargetType::kFinalized)->GetVkFormat(),
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            },
             // Depth
             VkAttachmentDescription{
                 .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
@@ -200,8 +189,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         });
 
         auto subpass = std::vector<VkSubpassDescription>();
-        // 1st pass
-        constexpr auto kColorAttachmentRef1 = std::to_array<VkAttachmentReference>({
+        constexpr auto kColorAttachmentRef = std::to_array<VkAttachmentReference>({
             {
                 .attachment = 0,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -211,40 +199,15 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
         });
-        constexpr auto kDepthStencilAttachmentRef1 = VkAttachmentReference{
-            .attachment = 3,
+        constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
+            .attachment = 2,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
         subpass.emplace_back(VkSubpassDescription{
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = static_cast<uint32_t>(kColorAttachmentRef1.size()),
-            .pColorAttachments = kColorAttachmentRef1.data(),
-            .pDepthStencilAttachment = &kDepthStencilAttachmentRef1,
-        });
-
-        // 2nd pass
-        constexpr auto kInputAttachmentRef2 = std::to_array<VkAttachmentReference>({
-            {
-                .attachment = 0,
-                .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            },
-            {
-                .attachment = 1,
-                .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            },
-        });
-        constexpr auto kColorAttachmentRef2 = std::to_array<VkAttachmentReference>({
-            {
-                .attachment = 2,
-                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            },
-        });
-        subpass.emplace_back(VkSubpassDescription{
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .inputAttachmentCount = static_cast<uint32_t>(kInputAttachmentRef2.size()),
-            .pInputAttachments = kInputAttachmentRef2.data(),
-            .colorAttachmentCount = static_cast<uint32_t>(kColorAttachmentRef2.size()),
-            .pColorAttachments = kColorAttachmentRef2.data(),
+            .colorAttachmentCount = static_cast<uint32_t>(kColorAttachmentRef.size()),
+            .pColorAttachments = kColorAttachmentRef.data(),
+            .pDepthStencilAttachment = &kDepthStencilAttachmentRef,
         });
 
         constexpr auto kDependencies = std::to_array({
@@ -258,16 +221,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            },
-            VkSubpassDependency{
-                .srcSubpass = 0,
-                .dstSubpass = 1,
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             },
         });
 
@@ -671,7 +624,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             const auto attachments = std::to_array(
                 {render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
-                 render_targets_.at(RenderTargetType::kFinalized)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -699,13 +651,6 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
                 },
         },
         // Normal
-        {
-            .color =
-                {
-                    {0.0f, 0.0f, 0.0f, 1.0f},
-                },
-        },
-        // Finalized
         {
             .color =
                 {
@@ -767,56 +712,12 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
         vkCmdDrawIndexed(command_buffer,
                          static_cast<uint32_t>(model.GetIndexBuffers()[0].GetSize()), 1, 0, 0, 0);
     }
+
+    spdlog::debug("End render pass");
+    vkCmdEndRenderPass(command_buffer);
+
     // compute
-    spdlog::info("Compute");
-    [&]() {
-        // Image Transition
-        const auto barrier = VkImageMemoryBarrier{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = 0,
-            .dstAccessMask = 0,
-            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = render_targets_.at(RenderTargetType::kColor)->GetVkImage(),
-            .subresourceRange =
-                {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1,
-                },
-        };
-        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                             &barrier);
-    }();
-    [&]() {
-        // Image Transition
-        const auto barrier = VkImageMemoryBarrier{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = 0,
-            .dstAccessMask = 0,
-            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = render_targets_.at(RenderTargetType::kNormal)->GetVkImage(),
-            .subresourceRange =
-                {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1,
-                },
-        };
-        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                             &barrier);
-    }();
+    spdlog::debug("Compute");
     [&]() {
         const auto div_up = [](const uint32_t x, const uint32_t y) -> uint32_t {
             return (x + y - 1) / y;
@@ -834,10 +735,6 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
                                 0, nullptr);
         vkCmdDispatch(command_buffer, group_count_x, group_count_y, 1);
     }();
-
-    // End render pass
-    spdlog::info("End render pass");
-    vkCmdEndRenderPass(command_buffer);
 }
 
 void DrawRasterize::OnRecreateSwapChain([[maybe_unused]] const DeviceResource& device_resource) {}
