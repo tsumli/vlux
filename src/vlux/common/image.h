@@ -1,6 +1,8 @@
 #ifndef COMMON_IMAGE_H
 #define COMMON_IMAGE_H
 
+#include <vulkan/vulkan_core.h>
+
 #include "pch.h"
 
 namespace vlux {

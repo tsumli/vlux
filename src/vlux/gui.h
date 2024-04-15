@@ -1,10 +1,19 @@
 #ifndef IMGUI_H
 #define IMGUI_H
+
+#include <vulkan/vulkan_core.h>
+
+#include "common/descriptor_pool.h"
 #include "pch.h"
 //
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+//
+#include "common/command_buffer.h"
+#include "common/descriptor_pool.h"
+#include "common/frame_buffer.h"
+#include "common/render_pass.h"
 
 namespace vlux {
 [[maybe_unused]] static bool IsExtensionAvailable(const ImVector<VkExtensionProperties>& properties,
@@ -22,8 +31,9 @@ struct GuiInput {
     const uint32_t queue_family;
     const VkQueue queue;
     const VkPipelineCache pipeline_cache;
-    const VkRenderPass render_pass;
     const uint32_t image_count;
+    const VkFormat swapchain_format;
+    const std::vector<VkImageView> swapchain_image_views;
 };
 
 class Gui {
@@ -38,7 +48,8 @@ class Gui {
     ~Gui();
     void CreateWindow();
     void OnStart() const;
-    void Render(const VkCommandBuffer command_buffer) const;
+    void Render(const VkCommandBuffer command_buffer, const uint32_t width, const uint32_t heigh,
+                const int image_idx) const;
 
    private:
     static constexpr uint32_t kMinImageCount = 2;
@@ -48,7 +59,9 @@ class Gui {
     const VkPhysicalDevice physical_device_;
     const uint32_t queue_family_;
 
-    VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
+    std::optional<DescriptorPool> descriptor_pool_;
+    std::optional<RenderPass> render_pass_;
+    std::vector<FrameBuffer> framebuffer_;
 };
 }  // namespace vlux
 

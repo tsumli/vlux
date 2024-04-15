@@ -1,6 +1,13 @@
 #include "utils.h"
 
 namespace vlux {
+std::pair<int, int> GetWindowSize(GLFWwindow* window) {
+    int width;
+    int height;
+    glfwGetWindowSize(window, &width, &height);
+
+    return {width, height};
+}
 VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, const VkImageTiling tiling,
                              const VkFormatFeatureFlags features,
                              const VkPhysicalDevice physical_device) {

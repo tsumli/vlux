@@ -18,7 +18,7 @@ class Swapchain {
     // acccessor
     VkSwapchainKHR GetVkSwapchain() const { return swapchain_; }
     const std::vector<VkImage>& GetVkImages() const { return images_; }
-    VkFormat GetFormat() const {
+    VkFormat GetVkFormat() const {
         if (!format_.has_value()) {
             throw std::runtime_error("`Swapchain::format_` has no values.");
         }

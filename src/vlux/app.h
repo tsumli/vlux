@@ -3,6 +3,8 @@
 #include <memory>
 
 #include "camera.h"
+#include "common/command_buffer.h"
+#include "common/command_pool.h"
 #include "control.h"
 #include "device_resource/device_resource.h"
 #include "draw/draw_strategy.h"
@@ -47,7 +49,9 @@ class App {
     // Draw
     std::unique_ptr<draw::DrawStrategy> draw_ = nullptr;
 
-    int current_frame_ = 0;
+    // Resource
+    std::optional<CommandPool> command_pool_ = std::nullopt;
+    std::optional<CommandBuffer> command_buffer_ = std::nullopt;
 
     // frame timer
     FrameTimer frame_timer_;

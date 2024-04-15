@@ -1,6 +1,9 @@
 #include "swapchain.h"
 
+#include <vulkan/vulkan_core.h>
+
 #include "common/queue.h"
+#include "pch.h"
 #include "surface.h"
 
 namespace vlux {
@@ -53,7 +56,8 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
             image_count > swapchain_support.capabilities.maxImageCount) {
             image_count = swapchain_support.capabilities.maxImageCount;
         }
-        return image_count;
+        // return image_count;
+        return kMaxFramesInFlight;
     }();
 
     const auto indices = FindQueueFamilies(physical_device, surface);
@@ -69,7 +73,8 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
             .imageColorSpace = surface_format.colorSpace,
             .imageExtent = extent_.value(),
             .imageArrayLayers = 1,
-            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_SAMPLED_BIT,
             .preTransform = swapchain_support.capabilities.currentTransform,
             .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             .presentMode = present_mode,

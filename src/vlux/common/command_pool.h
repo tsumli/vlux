@@ -1,8 +1,6 @@
-#ifndef COMMAND_POOL_H
-#define COMMAND_POOL_H
+#ifndef COMMON_COMMAND_POOL_H
+#define COMMON_COMMAND_POOL_H
 #include "pch.h"
-//
-#include "common/queue.h"
 
 namespace vlux {
 class CommandPool {

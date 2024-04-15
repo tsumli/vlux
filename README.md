@@ -38,18 +38,20 @@ make
 ```
 or you can just use VSCode to launch.
 
-
 ## TODO
-- [x] mouse control
-- [ ] tone mapping
-- [ ] lighting
-- [ ] transparent pass
-- [ ] use config file
-- [ ] deferred rendering
-- [ ] cubemap
-- [ ] reflection
-- [ ] shadow
+- [x] Mouse control
+- [x] Compute shader
+- [ ] Deferred rendering
+  - [x] Multi render targets 
+  - [ ] Lighting
+- [ ] Post processes  
+  - [x] Gamma correction
+  - [ ] Tone mapping
+- [ ] Transparent pass
+- [ ] Use config file
+- [ ] Cubemap
+- [ ] Reflection
+- [ ] Shadow
 - [ ] LOD
-- [ ] raytracing
-- [ ] mesh shader
-- [ ] mac support
+- [ ] Raytracing
+- [ ] Mesh shader

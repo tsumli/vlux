@@ -17,10 +17,11 @@ class RenderTarget {
     RenderTarget(RenderTarget&&) = delete;
     RenderTarget& operator=(RenderTarget&&) = delete;
 
-    VkFormat GetFormat() const { return format_; }
-    VkImage& GetImageRef() { return image_; }
-    VkDeviceMemory& GetDeviceMemoryRef() { return device_memory_; }
-    VkImageView GetImageView() const { return image_view_; }
+    VkFormat GetVkFormat() const { return format_; }
+    VkImage GetVkImage() const { return image_; }
+    VkImage& GetVkImageRef() { return image_; }
+    VkDeviceMemory& GetVkDeviceMemoryRef() { return device_memory_; }
+    VkImageView GetVkImageView() const { return image_view_; }
 
     void SetFormat(const VkFormat format) { format_ = format; }
     void SetImageView(const VkImageView image_view) { image_view_ = image_view; }

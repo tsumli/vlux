@@ -23,26 +23,26 @@ class Texture {
         memcpy(data, image.GetPixels(), static_cast<size_t>(image.GetSize()));
         vkUnmapMemory(device, staging_buffer_memory);
 
-        CreateImage(image.GetWidth(), image.GetHeight(), VK_FORMAT_R8G8B8A8_SRGB,
+        CreateImage(image.GetWidth(), image.GetHeight(), VK_FORMAT_B8G8R8A8_SRGB,
                     VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_image_, texture_image_memory_,
                     device, physical_device);
 
-        TransitionImageLayout(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
+        TransitionImageLayout(texture_image_, VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, graphics_queue, command_pool,
                               device);
         CopyBufferToImage(staging_buffer, texture_image_, static_cast<uint32_t>(image.GetWidth()),
                           static_cast<uint32_t>(image.GetHeight()), graphics_queue, command_pool,
                           device);
         TransitionImageLayout(
-            texture_image_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            texture_image_, VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, graphics_queue, command_pool, device);
 
         vkDestroyBuffer(device, staging_buffer, nullptr);
         vkFreeMemory(device, staging_buffer_memory, nullptr);
 
-        texture_image_view_ = CreateImageView(texture_image_, VK_FORMAT_R8G8B8A8_SRGB,
+        texture_image_view_ = CreateImageView(texture_image_, VK_FORMAT_B8G8R8A8_SRGB,
                                               VK_IMAGE_ASPECT_COLOR_BIT, device);
     }
 

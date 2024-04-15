@@ -1,16 +1,7 @@
 #include "control.h"
 
+#include "common/utils.h"
 namespace vlux {
-namespace {
-std::pair<int, int> GetWindowSize(GLFWwindow* window) {
-    int width;
-    int height;
-    glfwGetWindowSize(window, &width, &height);
-
-    return {width, height};
-}
-}  // namespace
-
 Keyboard::Keyboard(GLFWwindow* window) : window_(window) {}
 
 int Keyboard::GetState(int key) const {

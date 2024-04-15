@@ -1,6 +1,6 @@
 #include "rasterize.h"
 
-#include <ranges>
+#include <vulkan/vulkan_core.h>
 
 #include "common/texture_view.h"
 #include "common/utils.h"
@@ -18,6 +18,52 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     : scene_(scene), transform_ubo_(transform_ubo) {
     const auto device = device_resource.GetDevice().GetVkDevice();
     const auto physical_device = device_resource.GetVkPhysicalDevice();
+    const auto [width, height] = device_resource.GetWindow().GetWindowSize();
+
+    // Color
+    [&]() {
+        render_targets_[RenderTargetType::kColor].emplace(device);
+        auto& color = render_targets_.at(RenderTargetType::kColor).value();
+        color.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, color.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color.GetVkImageRef(),
+                    color.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(color.GetVkImageRef(), color.GetVkFormat(),
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        color.SetImageView(image_view);
+    }();
+
+    // Normal
+    [&]() {
+        render_targets_[RenderTargetType::kNormal].emplace(device);
+        auto& normal = render_targets_.at(RenderTargetType::kNormal).value();
+        normal.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, normal.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, normal.GetVkImageRef(),
+                    normal.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(normal.GetVkImageRef(), normal.GetVkFormat(),
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        normal.SetImageView(image_view);
+    }();
+
+    // Finalized
+    [&]() {
+        render_targets_[RenderTargetType::kFinalized].emplace(device);
+        auto& finalized = render_targets_.at(RenderTargetType::kFinalized).value();
+        finalized.SetFormat(VK_FORMAT_R8G8B8A8_UNORM);
+        CreateImage(width, height, finalized.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, finalized.GetVkImageRef(),
+                    finalized.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(finalized.GetVkImageRef(), finalized.GetVkFormat(),
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        finalized.SetImageView(image_view);
+    }();
 
     // Depth Stencil
     [&]() {
@@ -32,14 +78,13 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             FindSupportedFormat(candidates, VK_IMAGE_TILING_OPTIMAL,
                                 VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, physical_device);
         depth_stencil.SetFormat(format);
-
-        const auto [width, height] = device_resource.GetWindow().GetWindowSize();
-        CreateImage(width, height, depth_stencil.GetFormat(), VK_IMAGE_TILING_OPTIMAL,
+        CreateImage(width, height, depth_stencil.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_stencil.GetImageRef(),
-                    depth_stencil.GetDeviceMemoryRef(), device, physical_device);
-        auto image_view = CreateImageView(depth_stencil.GetImageRef(), depth_stencil.GetFormat(),
-                                          VK_IMAGE_ASPECT_DEPTH_BIT, device);
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_stencil.GetVkImageRef(),
+                    depth_stencil.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view =
+            CreateImageView(depth_stencil.GetVkImageRef(), depth_stencil.GetVkFormat(),
+                            VK_IMAGE_ASPECT_DEPTH_BIT, device);
         depth_stencil.SetImageView(image_view);
     }();
 
@@ -78,7 +123,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .pBindings = kLayoutBindings.data(),
         };
 
-        descriptor_set_layout_.emplace(device, layout_info);
+        graphics_descriptor_set_layout_.emplace(device, layout_info);
     }();
 
     // DescriptorPool
@@ -102,51 +147,70 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
             .pPoolSizes = pool_sizes.data(),
         };
-        descriptor_pool_.emplace(device, pool_info);
+        graphics_descriptor_pool_.emplace(device, pool_info);
     }();
 
     // RenderPass
     [&]() {
-        const auto color_attachment = VkAttachmentDescription{
-            .format = device_resource.GetSwapchain().GetFormat(),
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        };
+        const auto attachment_descs = std::to_array({
+            // Color
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kColor)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
+            // Normal
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kNormal)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
+            // Depth
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
+        });
 
+        auto subpass = std::vector<VkSubpassDescription>();
         constexpr auto kColorAttachmentRef = std::to_array<VkAttachmentReference>({
             {
                 .attachment = 0,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            {
+                .attachment = 1,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
         });
-
-        const auto depth_stencil_attachment = VkAttachmentDescription{
-            .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetFormat(),
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        };
         constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
-            .attachment = 1,
+            .attachment = 2,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
-
-        const auto subpass = VkSubpassDescription{
+        subpass.emplace_back(VkSubpassDescription{
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
+            .colorAttachmentCount = static_cast<uint32_t>(kColorAttachmentRef.size()),
             .pColorAttachments = kColorAttachmentRef.data(),
             .pDepthStencilAttachment = &kDepthStencilAttachmentRef,
-        };
-        const auto dependencies = std::to_array({
+        });
+
+        constexpr auto kDependencies = std::to_array({
             VkSubpassDependency{
                 .srcSubpass = VK_SUBPASS_EXTERNAL,
                 .dstSubpass = 0,
@@ -160,29 +224,27 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             },
         });
 
-        const auto attachments = std::to_array({color_attachment, depth_stencil_attachment});
         const auto render_pass_info = VkRenderPassCreateInfo{
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-            .attachmentCount = static_cast<uint32_t>(attachments.size()),
-            .pAttachments = attachments.data(),
-            .subpassCount = 1,
-            .pSubpasses = &subpass,
-            .dependencyCount = static_cast<uint32_t>(dependencies.size()),
-            .pDependencies = dependencies.data(),
+            .attachmentCount = static_cast<uint32_t>(attachment_descs.size()),
+            .pAttachments = attachment_descs.data(),
+            .subpassCount = static_cast<uint32_t>(subpass.size()),
+            .pSubpasses = subpass.data(),
+            .dependencyCount = static_cast<uint32_t>(kDependencies.size()),
+            .pDependencies = kDependencies.data(),
         };
         render_pass_.emplace(device, render_pass_info);
     }();
 
-    // PipelineLayout
+    // PipelineLayout (Graphics)
     [&]() {
-        const auto set_layout = descriptor_set_layout_->GetVkDescriptorSetLayout();
+        const auto set_layout = graphics_descriptor_set_layout_->GetVkDescriptorSetLayout();
         const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .setLayoutCount = 1,
             .pSetLayouts = &set_layout,
         };
-
-        pipeline_layout_.emplace(device, pipeline_layout_info);
+        graphics_pipeline_layout_.emplace(device, pipeline_layout_info);
     }();
 
     // GraphicsPipeline
@@ -244,25 +306,41 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .stencilTestEnable = VK_FALSE,
         };
 
-        constexpr auto kColorBlendAttachment = VkPipelineColorBlendAttachmentState{
-            .blendEnable = VK_TRUE,
-            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-            .colorBlendOp = VK_BLEND_OP_ADD,
-            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-            .alphaBlendOp = VK_BLEND_OP_ADD,
-            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-        };
+        constexpr auto kColorBlendAttachment = std::to_array({
+            // Color
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_TRUE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
+
+            // Normal
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_TRUE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
+        });
 
         const auto color_blending = [&]() {
             auto color_blending = VkPipelineColorBlendStateCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                 .logicOpEnable = VK_FALSE,
                 .logicOp = VK_LOGIC_OP_COPY,
-                .attachmentCount = 1,
-                .pAttachments = &kColorBlendAttachment,
+                .attachmentCount = static_cast<uint32_t>(kColorBlendAttachment.size()),
+                .pAttachments = kColorBlendAttachment.data(),
             };
             color_blending.blendConstants[0] = 0.0f;
             color_blending.blendConstants[1] = 0.0f;
@@ -293,7 +371,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .pDepthStencilState = &kDepthStencil,
             .pColorBlendState = &color_blending,
             .pDynamicState = &kDynamicState,
-            .layout = pipeline_layout_->GetVkPipelineLayout(),
+            .layout = graphics_pipeline_layout_->GetVkPipelineLayout(),
             .renderPass = render_pass_->GetVkRenderPass(),
             .subpass = 0,
             .basePipelineHandle = VK_NULL_HANDLE,
@@ -302,45 +380,22 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         graphics_pipeline_.emplace(device, pipeline_info);
     }();
 
-    // FrameBuffer
-    [&]() {
-        const auto width = device_resource.GetSwapchain().GetVkExtent().width;
-        const auto height = device_resource.GetSwapchain().GetVkExtent().height;
-        const auto image_views = device_resource.GetSwapchain().GetVkImageViews();
-
-        framebuffer_.reserve(image_views.size());
-        for (size_t i = 0; i < image_views.size(); i++) {
-            const auto attachments = std::to_array(
-                {image_views[i],
-                 render_targets_.at(RenderTargetType::kDepthStencil)->GetImageView()});
-            const auto framebuffer_info = VkFramebufferCreateInfo{
-                .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-                .renderPass = render_pass_->GetVkRenderPass(),
-                .attachmentCount = static_cast<uint32_t>(attachments.size()),
-                .pAttachments = attachments.data(),
-                .width = width,
-                .height = height,
-                .layers = 1,
-            };
-            framebuffer_.emplace_back(device, framebuffer_info);
-        }
-    }();
-
     // DescriptorSets
     [&]() {
         // allocate descriptor sets
-        descriptor_sets_.resize(kMaxFramesInFlight);
+        graphics_descriptor_sets_.resize(kMaxFramesInFlight);
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            const auto descriptor_set_layout = descriptor_set_layout_->GetVkDescriptorSetLayout();
+            const auto descriptor_set_layout =
+                graphics_descriptor_set_layout_->GetVkDescriptorSetLayout();
             const auto alloc_info = VkDescriptorSetAllocateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                .descriptorPool = descriptor_pool_->GetVkDescriptorPool(),
+                .descriptorPool = graphics_descriptor_pool_->GetVkDescriptorPool(),
                 .descriptorSetCount = 1,  // only have one descriptor set for each layout
                 .pSetLayouts = &descriptor_set_layout,
             };
-            descriptor_sets_.at(frame_i).reserve(scene.GetModels().size());
+            graphics_descriptor_sets_.at(frame_i).reserve(scene.GetModels().size());
             for (size_t model_i = 0; model_i < scene.GetModels().size(); model_i++) {
-                descriptor_sets_.at(frame_i).emplace_back(device, alloc_info);
+                graphics_descriptor_sets_.at(frame_i).emplace_back(device, alloc_info);
             }
         }
 
@@ -371,7 +426,8 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 };
                 descriptor_write.emplace_back(VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
+                    .dstSet =
+                        graphics_descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
                     .dstBinding = 0,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
@@ -391,7 +447,8 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     const auto color_image_info = create_image_info(texture_view->color);
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet = descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
+                        .dstSet =
+                            graphics_descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
                         .dstBinding = 1,
                         .dstArrayElement = 0,
                         .descriptorCount = 1,
@@ -403,7 +460,8 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     const auto normal_image_info = create_image_info(texture_view->normal);
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet = descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
+                        .dstSet =
+                            graphics_descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
                         .dstBinding = 2,
                         .dstArrayElement = 0,
                         .descriptorCount = 1,
@@ -417,21 +475,193 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             }
         }
     }();
+
+    // DescriptorPool
+    [&]() {
+        const auto pool_sizes = std::to_array({
+            // color + normal + finalized
+            VkDescriptorPoolSize{
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 3,
+            },
+        });
+        const auto pool_info = VkDescriptorPoolCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = kMaxFramesInFlight,
+            .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
+            .pPoolSizes = pool_sizes.data(),
+        };
+        compute_descriptor_pool_.emplace(device, pool_info);
+    }();
+
+    // DescriptorSetLayout (Compute)
+    [&]() {
+        constexpr auto kLayoutBindings = std::to_array({
+            // color
+            VkDescriptorSetLayoutBinding{
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                .pImmutableSamplers = nullptr,
+            },
+            // normal
+            VkDescriptorSetLayoutBinding{
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                .pImmutableSamplers = nullptr,
+            },
+            // output
+            VkDescriptorSetLayoutBinding{
+                .binding = 2,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                .pImmutableSamplers = nullptr,
+            },
+        });
+        const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+            .pBindings = kLayoutBindings.data(),
+        };
+        compute_descriptor_set_layout_.emplace(device, layout_info);
+    }();
+
+    // PipelineLayout (Compute)
+    [&]() {
+        const auto set_layout = compute_descriptor_set_layout_->GetVkDescriptorSetLayout();
+        const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts = &set_layout,
+        };
+        compute_pipeline_layout_.emplace(device, pipeline_layout_info);
+    }();
+
+    // ComputePipeline
+    [&]() {
+        const auto comp_path = std::filesystem::path("rasterize/deferred.comp.spv");
+        const auto comp_shader = Shader(comp_path, VK_SHADER_STAGE_COMPUTE_BIT, device);
+        const auto pipeline_info = VkComputePipelineCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            .stage = comp_shader.GetStageInfo(),
+            .layout = compute_pipeline_layout_->GetVkPipelineLayout(),
+        };
+        compute_pipeline_.emplace(device, pipeline_info);
+    }();
+
+    // DescriptorSets (Compute)
+    [&]() {
+        // allocate descriptor sets
+        compute_descriptor_sets_.reserve(kMaxFramesInFlight);
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto descriptor_set_layout =
+                compute_descriptor_set_layout_->GetVkDescriptorSetLayout();
+            const auto alloc_info = VkDescriptorSetAllocateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = compute_descriptor_pool_->GetVkDescriptorPool(),
+                .descriptorSetCount = 1,
+                .pSetLayouts = &descriptor_set_layout,
+            };
+            compute_descriptor_sets_.emplace_back(device, alloc_info);
+        }
+
+        // update descriptor sets
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto color_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            };
+            const auto normal_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            };
+            const auto finalized_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kFinalized)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            };
+            const auto descriptor_write = std::to_array({
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(),
+                    .dstBinding = 0,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &color_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(),
+                    .dstBinding = 1,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &normal_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(),
+                    .dstBinding = 2,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &finalized_image_info,
+                },
+            });
+            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
+                                   descriptor_write.data(), 0, nullptr);
+        }
+    }();
+
+    // FrameBuffer
+    [&]() {
+        framebuffer_.reserve(kMaxFramesInFlight);
+        for (size_t frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto attachments = std::to_array(
+                {render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
+            const auto framebuffer_info = VkFramebufferCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+                .renderPass = render_pass_->GetVkRenderPass(),
+                .attachmentCount = static_cast<uint32_t>(attachments.size()),
+                .pAttachments = attachments.data(),
+                .width = width,
+                .height = height,
+                .layers = 1,
+            };
+            framebuffer_.emplace_back(device, framebuffer_info);
+        }
+    }();
 }
 
-void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx, const uint32_t cur_frame,
+void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
                                         const VkExtent2D& swapchain_extent,
                                         const VkCommandBuffer command_buffer) {
-    const auto begin_info = VkCommandBufferBeginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    };
-
-    if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
-        throw std::runtime_error("failed to begin recording command buffer!");
-    }
-
-    constexpr auto kClearValues = std::to_array<VkClearValue>(
-        {{.color = {{0.0f, 0.0f, 0.0f, 1.0f}}}, {.depthStencil = {1.0f, 0}}});
+    constexpr auto kClearValues = std::to_array<VkClearValue>({
+        // Color
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 1.0f},
+                },
+        },
+        // Normal
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 1.0f},
+                },
+        },
+        // Depth Stencil
+        {
+            .depthStencil = {1.0f, 0},
+        },
+    });
 
     const auto render_pass_info = VkRenderPassBeginInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -473,14 +703,38 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx, const uint32_t
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.data(), offsets.data());
         vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetIndexBuffer(), 0,
                              VK_INDEX_TYPE_UINT16);
-        const auto descriptor_set =
-            std::to_array({descriptor_sets_.at(cur_frame).at(model_i).GetVkDescriptorSet()});
+        const auto descriptor_set = std::to_array(
+            {graphics_descriptor_sets_.at(image_idx).at(model_i).GetVkDescriptorSet()});
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                pipeline_layout_->GetVkPipelineLayout(), 0, descriptor_set.size(),
-                                descriptor_set.data(), 0, nullptr);
+                                graphics_pipeline_layout_->GetVkPipelineLayout(), 0,
+                                static_cast<uint32_t>(descriptor_set.size()), descriptor_set.data(),
+                                0, nullptr);
         vkCmdDrawIndexed(command_buffer,
                          static_cast<uint32_t>(model.GetIndexBuffers()[0].GetSize()), 1, 0, 0, 0);
     }
+
+    spdlog::debug("End render pass");
+    vkCmdEndRenderPass(command_buffer);
+
+    // compute
+    spdlog::debug("Compute");
+    [&]() {
+        const auto div_up = [](const uint32_t x, const uint32_t y) -> uint32_t {
+            return (x + y - 1) / y;
+        };
+        // thread size is 16x16 in the shader
+        const auto group_count_x = div_up(swapchain_extent.width, 16);
+        const auto group_count_y = div_up(swapchain_extent.height, 16);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          compute_pipeline_->GetVkComputePipeline());
+        const auto descriptor_set =
+            std::to_array({compute_descriptor_sets_.at(image_idx).GetVkDescriptorSet()});
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                compute_pipeline_layout_->GetVkPipelineLayout(), 0,
+                                static_cast<uint32_t>(descriptor_set.size()), descriptor_set.data(),
+                                0, nullptr);
+        vkCmdDispatch(command_buffer, group_count_x, group_count_y, 1);
+    }();
 }
 
 void DrawRasterize::OnRecreateSwapChain([[maybe_unused]] const DeviceResource& device_resource) {}

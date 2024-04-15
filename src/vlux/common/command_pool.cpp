@@ -1,5 +1,7 @@
 #include "command_pool.h"
 
+#include "common/queue.h"
+
 namespace vlux {
 
 CommandPool::CommandPool(const VkDevice device, const VkPhysicalDevice physical_device,
