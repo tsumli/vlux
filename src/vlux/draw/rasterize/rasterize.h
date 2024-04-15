@@ -52,16 +52,16 @@ class DrawRasterize final : public DrawStrategy {
 
     std::optional<DescriptorPool> compute_descriptor_pool_;
     std::vector<DescriptorSets> compute_descriptor_sets_;
-    std::optional<DescriptorSetLayout> compute_descriptor_set_layout_;
+    std::vector<DescriptorSetLayout> compute_descriptor_set_layout_;
     std::optional<PipelineLayout> compute_pipeline_layout_;
     std::optional<ComputePipeline> compute_pipeline_;
 
     std::vector<FrameBuffer> framebuffer_;
-    std::shared_ptr<TextureSampler> texture_sampler_;
 
     // render targets
     enum class RenderTargetType { kColor, kNormal, kDepthStencil, kFinalized, kCount };
     std::unordered_map<RenderTargetType, std::optional<RenderTarget>> render_targets_;
+    std::unordered_map<RenderTargetType, std::optional<TextureSampler>> texture_samplers_;
 };
 }  // namespace vlux::draw::rasterize
 

@@ -42,7 +42,7 @@ class Texture {
         vkDestroyBuffer(device, staging_buffer, nullptr);
         vkFreeMemory(device, staging_buffer_memory, nullptr);
 
-        texture_image_view_ = CreateImageView(texture_image_, VK_FORMAT_B8G8R8A8_SRGB,
+        texture_image_view_ = CreateImageView(texture_image_, VK_FORMAT_B8G8R8A8_SRGB, 0,
                                               VK_IMAGE_ASPECT_COLOR_BIT, device);
     }
 

@@ -18,6 +18,7 @@ class DescriptorSets {
 
     VkDescriptorSet GetVkDescriptorSet(const size_t idx) const { return descriptor_sets_.at(idx); }
     const VkDescriptorSet* GetVkDescriptorSetPtr() const { return descriptor_sets_.data(); }
+    size_t GetSize() const { return descriptor_sets_.size(); }
 
    private:
     std::vector<VkDescriptorSet> descriptor_sets_;

@@ -12,8 +12,9 @@ void CreateImage(const uint32_t width, const uint32_t height, VkFormat format,
                  VkDeviceMemory& image_memory, const VkDevice device,
                  const VkPhysicalDevice physical_device);
 
-VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags,
-                            const VkDevice device);
+VkImageView CreateImageView(const VkImage image, const VkFormat format,
+                            const VkImageViewCreateFlags create_flags,
+                            VkImageAspectFlags aspect_flags, const VkDevice device);
 
 void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_t width,
                        const uint32_t height, const VkQueue graphics_queue,
