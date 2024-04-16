@@ -516,6 +516,8 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
     // DescriptorSetLayout (Compute)
     [&]() {
+        // total set = 2
+        compute_descriptor_set_layout_.reserve(2);
         // set = 0
         {
             constexpr auto kLayoutBindings = std::to_array({
