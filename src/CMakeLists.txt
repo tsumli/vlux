@@ -45,6 +45,7 @@ set(LIB_SRC
     vlux/utils/debug.h
     vlux/utils/io.h
     vlux/utils/string.h
+    vlux/utils/timer.h
 )
 
 target_sources(${PROJECT_NAME} PRIVATE main.cpp)
