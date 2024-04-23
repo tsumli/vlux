@@ -383,20 +383,18 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // DescriptorSets
     [&]() {
         // allocate descriptor sets
-        graphics_descriptor_sets_.resize(kMaxFramesInFlight);
+        graphics_descriptor_sets_.reserve(kMaxFramesInFlight);
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            const auto descriptor_set_layout =
-                graphics_descriptor_set_layout_->GetVkDescriptorSetLayout();
+            const auto descriptor_set_layout = std::vector<VkDescriptorSetLayout>(
+                scene.GetModels().size(),
+                graphics_descriptor_set_layout_->GetVkDescriptorSetLayout());
             const auto alloc_info = VkDescriptorSetAllocateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                 .descriptorPool = graphics_descriptor_pool_->GetVkDescriptorPool(),
-                .descriptorSetCount = 1,  // only have one descriptor set for each layout
-                .pSetLayouts = &descriptor_set_layout,
+                .descriptorSetCount = static_cast<uint32_t>(scene.GetModels().size()),
+                .pSetLayouts = descriptor_set_layout.data(),
             };
-            graphics_descriptor_sets_.at(frame_i).reserve(scene.GetModels().size());
-            for (size_t model_i = 0; model_i < scene.GetModels().size(); model_i++) {
-                graphics_descriptor_sets_.at(frame_i).emplace_back(device, alloc_info);
-            }
+            graphics_descriptor_sets_.emplace_back(device, alloc_info);
         }
 
         // texture sampler
@@ -426,8 +424,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 };
                 descriptor_write.emplace_back(VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet =
-                        graphics_descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
+                    .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
                     .dstBinding = 0,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
@@ -447,8 +444,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     const auto color_image_info = create_image_info(texture_view->color);
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet =
-                            graphics_descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
+                        .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
                         .dstBinding = 1,
                         .dstArrayElement = 0,
                         .descriptorCount = 1,
@@ -460,8 +456,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     const auto normal_image_info = create_image_info(texture_view->normal);
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet =
-                            graphics_descriptor_sets_.at(frame_i).at(model_i).GetVkDescriptorSet(),
+                        .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
                         .dstBinding = 2,
                         .dstArrayElement = 0,
                         .descriptorCount = 1,
@@ -586,7 +581,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             const auto descriptor_write = std::to_array({
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(),
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
                     .dstBinding = 0,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
@@ -595,7 +590,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(),
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
                     .dstBinding = 1,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
@@ -604,7 +599,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(),
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
                     .dstBinding = 2,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
@@ -703,8 +698,8 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.data(), offsets.data());
         vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetIndexBuffer(), 0,
                              VK_INDEX_TYPE_UINT16);
-        const auto descriptor_set = std::to_array(
-            {graphics_descriptor_sets_.at(image_idx).at(model_i).GetVkDescriptorSet()});
+        const auto descriptor_set =
+            std::to_array({graphics_descriptor_sets_.at(image_idx).GetVkDescriptorSet(model_i)});
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 graphics_pipeline_layout_->GetVkPipelineLayout(), 0,
                                 static_cast<uint32_t>(descriptor_set.size()), descriptor_set.data(),
@@ -728,7 +723,7 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                           compute_pipeline_->GetVkComputePipeline());
         const auto descriptor_set =
-            std::to_array({compute_descriptor_sets_.at(image_idx).GetVkDescriptorSet()});
+            std::to_array({compute_descriptor_sets_.at(image_idx).GetVkDescriptorSet(0)});
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                 compute_pipeline_layout_->GetVkPipelineLayout(), 0,
                                 static_cast<uint32_t>(descriptor_set.size()), descriptor_set.data(),
