@@ -46,25 +46,37 @@ bool ComputeTangentFrame(std::vector<Vertex>& vertices, const std::vector<Index>
 }  // namespace
 
 tinygltf::Model LoadTinyGltfModel(const std::filesystem::path& path) {
-    assert(std::filesystem::exists(path));
+    if (!std::filesystem::exists(path)) {
+        throw std::runtime_error(fmt::format("file not found: {}", path.string()));
+    }
     tinygltf::Model model;
     std::string err;
     std::string warn;
+
     static tinygltf::TinyGLTF gltf;
-    if (!gltf.LoadBinaryFromFile(&model, &err, &warn, path.string())) {
-        spdlog::debug("Err: {}", err);
-        spdlog::debug("Warn: {}", warn);
-        throw std::runtime_error(fmt::format("failed to load: {}", path.string()));
+
+    if (path.extension().string() == ".glb") {
+        if (!gltf.LoadBinaryFromFile(&model, &err, &warn, path.string())) {
+            spdlog::debug("Err: {}", err);
+            spdlog::debug("Warn: {}", warn);
+            throw std::runtime_error(fmt::format("failed to load: {}", path.string()));
+        }
+    } else if (path.extension().string() == ".gltf") {
+        if (!gltf.LoadASCIIFromFile(&model, &err, &warn, path.string())) {
+            spdlog::debug("Err: {}", err);
+            spdlog::debug("Warn: {}", warn);
+            throw std::runtime_error(fmt::format("failed to load: {}", path.string()));
+        }
+    } else {
+        throw std::runtime_error(fmt::format("unsupported file format: {}", path.string()));
     }
     return model;
 }
 
-std::tuple<std::vector<Index>, std::vector<Vertex>, std::shared_ptr<Texture>,
-           std::shared_ptr<Texture>>
-LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
-                const VkQueue graphics_queue, const VkCommandPool command_pool,
-                const VkPhysicalDevice physical_device, const VkDevice device, const float scale,
-                const glm::vec3 translation) {
+GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
+                           const VkQueue graphics_queue, const VkCommandPool command_pool,
+                           const VkPhysicalDevice physical_device, const VkDevice device,
+                           const float scale, const glm::vec3 translation) {
     auto indices = std::vector<Index>();
     [&]() {
         {
@@ -178,13 +190,13 @@ LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& mod
     const auto base_color_idx = material.pbrMetallicRoughness.baseColorTexture.index;
     auto base_color_texture = base_color_idx != -1 ? create_texture(base_color_idx) : nullptr;
     const auto normal_idx = material.normalTexture.index;
-    auto normal_texture = base_color_idx != -1 ? create_texture(normal_idx) : nullptr;
+    auto normal_texture = normal_idx != -1 ? create_texture(normal_idx) : nullptr;
 
     return {
-        indices,
-        vertices,
-        base_color_texture,
-        normal_texture,
+        .indices = indices,
+        .vertices = vertices,
+        .base_color_texture = base_color_texture,
+        .normal_texture = normal_texture,
     };
 }
 

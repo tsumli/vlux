@@ -1,13 +1,13 @@
 #include "buffer.h"
 
-#include "spdlog/spdlog.h"
 #include "utils.h"
 
 namespace vlux {
 
 void CreateBuffer(const VkDeviceSize size, VkBufferUsageFlags usage,
-                  VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory,
-                  const VkDevice device, const VkPhysicalDevice physical_device) {
+                  const VkMemoryPropertyFlags properties, VkBuffer& buffer,
+                  VkDeviceMemory& buffer_memory, const VkDevice device,
+                  const VkPhysicalDevice physical_device) {
     const auto buffer_info = VkBufferCreateInfo{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
