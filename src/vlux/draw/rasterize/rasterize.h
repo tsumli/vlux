@@ -53,8 +53,8 @@ class DrawRasterize final : public DrawStrategy {
     std::optional<DescriptorPool> compute_descriptor_pool_;
     std::vector<DescriptorSets> compute_descriptor_sets_;
     std::vector<DescriptorSetLayout> compute_descriptor_set_layout_;
-    std::optional<PipelineLayout> compute_pipeline_layout_;
-    std::optional<ComputePipeline> compute_pipeline_;
+    std::vector<PipelineLayout> compute_pipeline_layout_;
+    std::vector<ComputePipeline> compute_pipeline_;
 
     std::vector<FrameBuffer> framebuffer_;
 

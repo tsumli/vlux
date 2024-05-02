@@ -180,17 +180,23 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
                   static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[2]));
 
     // texture
-    auto create_texture = [&](const auto idx) {
+    const auto get_image_idx = [&](const auto texture_idx) {
+        const auto& texture = model.textures[texture_idx];
+        return texture.source;
+    };
+
+    const auto create_texture = [&](const auto image_idx) {
+        const auto& image = model.images[image_idx];
         return std::make_shared<Texture>(
-            Image(model.images[idx].image, model.images[idx].width, model.images[idx].height,
-                  model.images[idx].component),
-            graphics_queue, command_pool, device, physical_device);
+            Image(image.image, image.width, image.height, image.component), graphics_queue,
+            command_pool, device, physical_device);
     };
 
     const auto base_color_idx = material.pbrMetallicRoughness.baseColorTexture.index;
-    auto base_color_texture = base_color_idx != -1 ? create_texture(base_color_idx) : nullptr;
+    auto base_color_texture =
+        base_color_idx != -1 ? create_texture(get_image_idx(base_color_idx)) : nullptr;
     const auto normal_idx = material.normalTexture.index;
-    auto normal_texture = normal_idx != -1 ? create_texture(normal_idx) : nullptr;
+    auto normal_texture = normal_idx != -1 ? create_texture(get_image_idx(normal_idx)) : nullptr;
 
     return {
         .indices = indices,

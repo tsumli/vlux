@@ -13,8 +13,10 @@ class DescriptorSets {
         }
     }
     ~DescriptorSets() = default;
-    DescriptorSets(const DescriptorSets&) = default;
-    DescriptorSets& operator=(const DescriptorSets&) = default;
+    DescriptorSets(const DescriptorSets&) = delete;
+    DescriptorSets& operator=(const DescriptorSets&) = delete;
+    DescriptorSets(DescriptorSets&&) = default;
+    DescriptorSets& operator=(DescriptorSets&&) = default;
 
     VkDescriptorSet GetVkDescriptorSet(const size_t idx) const { return descriptor_sets_.at(idx); }
     const VkDescriptorSet* GetVkDescriptorSetPtr() const { return descriptor_sets_.data(); }

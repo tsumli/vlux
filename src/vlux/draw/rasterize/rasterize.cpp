@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include "common/descriptor_set_layout.h"
 #include "common/texture_view.h"
 #include "common/utils.h"
 #include "device_resource/device_resource.h"
@@ -15,6 +16,10 @@
 #include "uniform_buffer.h"
 
 namespace vlux::draw::rasterize {
+namespace {
+constexpr auto kNumDescriptorSetCompute = 2;
+}
+
 DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo, Scene& scene,
                              const DeviceResource& device_resource)
     : scene_(scene), transform_ubo_(transform_ubo) {
@@ -389,7 +394,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             const auto alloc_info = VkDescriptorSetAllocateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                 .descriptorPool = graphics_descriptor_pool_->GetVkDescriptorPool(),
-                .descriptorSetCount = static_cast<uint32_t>(scene.GetModels().size()),
+                .descriptorSetCount = static_cast<uint32_t>(descriptor_set_layout.size()),
                 .pSetLayouts = descriptor_set_layout.data(),
             };
             graphics_descriptor_sets_.emplace_back(device, alloc_info);
@@ -494,20 +499,16 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
             },
-            // depth
-            VkDescriptorPoolSize{
-                .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
-            },
-            // color + normal + finalized
+            // depth + color + normal + finalized
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 3,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 4,
             },
         });
+
         const auto pool_info = VkDescriptorPoolCreateInfo{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = kMaxFramesInFlight,
+            .maxSets = kMaxFramesInFlight * kNumDescriptorSetCompute,
             .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
             .pPoolSizes = pool_sizes.data(),
         };
@@ -516,8 +517,8 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
     // DescriptorSetLayout (Compute)
     [&]() {
-        // total set = 2
-        compute_descriptor_set_layout_.reserve(2);
+        compute_descriptor_set_layout_.reserve(kNumDescriptorSetCompute);
+
         // set = 0
         {
             constexpr auto kLayoutBindings = std::to_array({
@@ -535,6 +536,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
                 .pBindings = kLayoutBindings.data(),
             };
+
             compute_descriptor_set_layout_.emplace_back(device, layout_info);
         }
         // set = 1
@@ -559,7 +561,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 // depth
                 VkDescriptorSetLayoutBinding{
                     .binding = 2,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .pImmutableSamplers = nullptr,
@@ -578,38 +580,43 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
                 .pBindings = kLayoutBindings.data(),
             };
+
             compute_descriptor_set_layout_.emplace_back(device, layout_info);
         }
     }();
 
     // PipelineLayout (Compute)
     [&]() {
-        auto set_layout = std::vector<VkDescriptorSetLayout>();
-        set_layout.reserve(compute_descriptor_set_layout_.size());
-        for (const auto& layout : compute_descriptor_set_layout_) {
-            set_layout.push_back(layout.GetVkDescriptorSetLayout());
+        compute_pipeline_layout_.reserve(kMaxFramesInFlight);
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            auto set_layout = std::vector<VkDescriptorSetLayout>();
+            set_layout.reserve(compute_descriptor_set_layout_.size());
+            for (const auto& layout : compute_descriptor_set_layout_) {
+                set_layout.emplace_back(layout.GetVkDescriptorSetLayout());
+            }
+            const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .setLayoutCount = static_cast<uint32_t>(set_layout.size()),
+                .pSetLayouts = set_layout.data(),
+            };
+            compute_pipeline_layout_.emplace_back(device, pipeline_layout_info);
         }
-        for (auto layout : set_layout) {
-            spdlog::info("layout: {:#x}", reinterpret_cast<std::uintptr_t>(layout));
-        }
-        const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = static_cast<uint32_t>(set_layout.size()),
-            .pSetLayouts = set_layout.data(),
-        };
-        compute_pipeline_layout_.emplace(device, pipeline_layout_info);
     }();
 
     // ComputePipeline
     [&]() {
+        compute_pipeline_.reserve(kMaxFramesInFlight);
         const auto comp_path = std::filesystem::path("rasterize/deferred.comp.spv");
         const auto comp_shader = Shader(comp_path, VK_SHADER_STAGE_COMPUTE_BIT, device);
-        const auto pipeline_info = VkComputePipelineCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .stage = comp_shader.GetStageInfo(),
-            .layout = compute_pipeline_layout_->GetVkPipelineLayout(),
-        };
-        compute_pipeline_.emplace(device, pipeline_info);
+
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto pipeline_info = VkComputePipelineCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+                .stage = comp_shader.GetStageInfo(),
+                .layout = compute_pipeline_layout_.at(frame_i).GetVkPipelineLayout(),
+            };
+            compute_pipeline_.emplace_back(device, pipeline_info);
+        }
     }();
 
     // DescriptorSets (Compute)
@@ -617,16 +624,18 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         // allocate descriptor sets
         compute_descriptor_sets_.reserve(kMaxFramesInFlight);
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            for (const auto& descriptor_set_layout : compute_descriptor_set_layout_) {
-                const auto vk_set_layout = descriptor_set_layout.GetVkDescriptorSetLayout();
-                const auto alloc_info = VkDescriptorSetAllocateInfo{
-                    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                    .descriptorPool = compute_descriptor_pool_->GetVkDescriptorPool(),
-                    .descriptorSetCount = 2,
-                    .pSetLayouts = &vk_set_layout,
-                };
-                compute_descriptor_sets_.emplace_back(device, alloc_info);
+            auto set_layout = std::vector<VkDescriptorSetLayout>();
+            set_layout.reserve(compute_descriptor_set_layout_.size());
+            for (const auto& layout : compute_descriptor_set_layout_) {
+                set_layout.emplace_back(layout.GetVkDescriptorSetLayout());
             }
+            const auto alloc_info = VkDescriptorSetAllocateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = compute_descriptor_pool_->GetVkDescriptorPool(),
+                .descriptorSetCount = static_cast<uint32_t>(set_layout.size()),
+                .pSetLayouts = set_layout.data(),
+            };
+            compute_descriptor_sets_.emplace_back(device, alloc_info);
         }
 
         // update descriptor sets
@@ -686,7 +695,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstBinding = 2,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .pImageInfo = &depth_image_info,
                 },
                 VkWriteDescriptorSet{
@@ -818,10 +827,11 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
         const auto group_count_x = div_up(swapchain_extent.width, 16);
         const auto group_count_y = div_up(swapchain_extent.height, 16);
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                          compute_pipeline_->GetVkComputePipeline());
+                          compute_pipeline_.at(image_idx).GetVkComputePipeline());
+
         vkCmdBindDescriptorSets(
             command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-            compute_pipeline_layout_->GetVkPipelineLayout(), 0,
+            compute_pipeline_layout_.at(image_idx).GetVkPipelineLayout(), 0,
             static_cast<uint32_t>(compute_descriptor_sets_.at(image_idx).GetSize()),
             compute_descriptor_sets_.at(image_idx).GetVkDescriptorSetPtr(), 0, nullptr);
         vkCmdDispatch(command_buffer, group_count_x, group_count_y, 1);
