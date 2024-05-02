@@ -8,12 +8,10 @@
 
 namespace vlux {
 
-template <IsUint8OrFloat ImageType>
 class Texture {
    public:
-    Texture(const Image<ImageType>& image, const VkQueue graphics_queue,
-            const VkCommandPool command_pool, const VkDevice device,
-            const VkPhysicalDevice physical_device)
+    Texture(const Image& image, const VkQueue graphics_queue, const VkCommandPool command_pool,
+            const VkDevice device, const VkPhysicalDevice physical_device)
         : device_(device) {
         VkBuffer staging_buffer;
         VkDeviceMemory staging_buffer_memory;
