@@ -11,12 +11,17 @@
 namespace vlux {
 tinygltf::Model LoadTinyGltfModel(const std::filesystem::path& path);
 
-std::tuple<std::vector<Index>, std::vector<Vertex>, std::shared_ptr<Texture>,
-           std::shared_ptr<Texture>>
-LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
-                const VkQueue graphics_queue, const VkCommandPool command_pool,
-                const VkPhysicalDevice physical_device, const VkDevice device, const float scale,
-                const glm::vec3 translation = {0.0f, 0.0f, 0.0f});
+struct GltfObject {
+    std::vector<Index> indices;
+    std::vector<Vertex> vertices;
+    std::shared_ptr<Texture> base_color_texture;
+    std::shared_ptr<Texture> normal_texture;
+};
+
+GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
+                           const VkQueue graphics_queue, const VkCommandPool command_pool,
+                           const VkPhysicalDevice physical_device, const VkDevice device,
+                           const float scale, const glm::vec3 translation = {0.0f, 0.0f, 0.0f});
 
 class GLTF {
    public:

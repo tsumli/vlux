@@ -79,10 +79,11 @@ target_link_libraries(${LIB_NAME} PUBLIC fmt)
 
 # download asset
 set(ASSET_DIR ${CMAKE_CURRENT_BINARY_DIR}/assets)
-message(STATUS "Assets: sponza")
+message(STATUS "Assets: gltf-samples")
 FetchContent_Declare(
-  sponza
-  URL https://themaister.net/sponza-gltf-pbr/sponza-gltf-pbr.zip
-  SOURCE_DIR ${ASSET_DIR}/sponza
+  gltf-samples
+  GIT_REPOSITORY https://github.com/KhronosGroup/glTF-Sample-Models.git
+  GIT_TAG d7a3cc8e51d7c573771ae77a57f16b0662a905c6
+  SOURCE_DIR ${ASSET_DIR}/gltf-samples
 )
-FetchContent_MakeAvailable(sponza)
+FetchContent_MakeAvailable(gltf-samples)

@@ -100,20 +100,21 @@ void App::CreateScene() {
     // create sponza
     [&]() {
         spdlog::debug("load sponza");
-        const auto gltf_model = LoadTinyGltfModel("assets/sponza/sponza.glb");
+        const auto gltf_model =
+            LoadTinyGltfModel("assets/gltf-samples/2.0/Sponza/glTF/Sponza.gltf");
         for (const auto& mesh : gltf_model.meshes) {
             for (const auto& primitive : mesh.primitives) {
-                auto [indices, vertices, base_color_texture, normal_texture] =
-                    LoadGltfObjects(primitive, gltf_model, graphics_queue, command_pool,
-                                    physical_device, device, 0.1f);
+                auto gltf_objects = LoadGltfObjects(primitive, gltf_model, graphics_queue,
+                                                    command_pool, physical_device, device, 0.1f);
                 auto vertex_buffers = std::vector<VertexBuffer>();
                 vertex_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
-                                            std::move(vertices));
+                                            std::move(gltf_objects.vertices));
                 auto index_buffers = std::vector<IndexBuffer>();
                 index_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
-                                           std::move(indices));
+                                           std::move(gltf_objects.indices));
                 auto model = Model(std::move(vertex_buffers), std::move(index_buffers),
-                                   std::move(base_color_texture), std::move(normal_texture));
+                                   std::move(gltf_objects.base_color_texture),
+                                   std::move(gltf_objects.normal_texture));
                 models.emplace_back(std::move(model));
             }
         }
