@@ -2,6 +2,8 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <exception>
+
 #include "common/queue.h"
 #include "pch.h"
 #include "surface.h"

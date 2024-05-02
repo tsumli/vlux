@@ -15,6 +15,7 @@ class Texture {
         : device_(device) {
         VkBuffer staging_buffer;
         VkDeviceMemory staging_buffer_memory;
+        const auto format = VK_FORMAT_R8G8B8A8_SRGB;
         CreateBuffer(image.GetSize(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                      staging_buffer, staging_buffer_memory, device, physical_device);
@@ -24,27 +25,26 @@ class Texture {
         memcpy(data, image.GetPixels(), static_cast<size_t>(image.GetSize()));
         vkUnmapMemory(device, staging_buffer_memory);
 
-        CreateImage(image.GetWidth(), image.GetHeight(), VK_FORMAT_B8G8R8A8_SRGB,
-                    VK_IMAGE_TILING_OPTIMAL,
+        CreateImage(image.GetWidth(), image.GetHeight(), format, VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_image_, texture_image_memory_,
                     device, physical_device);
 
-        TransitionImageLayout(texture_image_, VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
+        TransitionImageLayout(texture_image_, format, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, graphics_queue, command_pool,
                               device);
         CopyBufferToImage(staging_buffer, texture_image_, static_cast<uint32_t>(image.GetWidth()),
                           static_cast<uint32_t>(image.GetHeight()), graphics_queue, command_pool,
                           device);
-        TransitionImageLayout(
-            texture_image_, VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, graphics_queue, command_pool, device);
+        TransitionImageLayout(texture_image_, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, graphics_queue,
+                              command_pool, device);
 
         vkDestroyBuffer(device, staging_buffer, nullptr);
         vkFreeMemory(device, staging_buffer_memory, nullptr);
 
-        texture_image_view_ = CreateImageView(texture_image_, VK_FORMAT_B8G8R8A8_SRGB, 0,
-                                              VK_IMAGE_ASPECT_COLOR_BIT, device);
+        texture_image_view_ =
+            CreateImageView(texture_image_, format, 0, VK_IMAGE_ASPECT_COLOR_BIT, device);
     }
 
     ~Texture() {

@@ -82,7 +82,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     [&]() {
         render_targets_[RenderTargetType::kFinalized].emplace(device);
         auto& finalized = render_targets_.at(RenderTargetType::kFinalized).value();
-        finalized.SetFormat(VK_FORMAT_R8G8B8A8_UNORM);
+        finalized.SetFormat(VK_FORMAT_B8G8R8A8_UNORM);
         CreateImage(width, height, finalized.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
