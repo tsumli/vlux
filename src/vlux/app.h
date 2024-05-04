@@ -61,6 +61,9 @@ class App {
 
     // frame timer
     FrameTimer frame_timer_;
+
+    // config
+    const nlohmann::json config_;
 };
 }  // namespace vlux
 

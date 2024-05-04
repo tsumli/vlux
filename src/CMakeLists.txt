@@ -54,6 +54,7 @@ set(LIB_SRC
     # ./utils
     vlux/utils/debug.h
     vlux/utils/io.h
+    vlux/utils/path.h
     vlux/utils/string.h
     vlux/utils/timer.h
 )
