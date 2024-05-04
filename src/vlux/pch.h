@@ -30,6 +30,7 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
@@ -49,7 +50,6 @@ constexpr auto kValidationLayers = std::array<const char*, 0>();
 constexpr auto kValidationLayers = std::to_array<const char*>({"VK_LAYER_KHRONOS_validation"});
 #endif
 
-constexpr auto kDeviceExtensions = std::to_array<const char*>({VK_KHR_SWAPCHAIN_EXTENSION_NAME});
 constexpr auto kMaxFramesInFlight = 2;
 
 #endif

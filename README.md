@@ -58,3 +58,5 @@ or you can just use VSCode to launch.
 - [ ] Raytracing
 - [ ] Mesh shader
 - [ ] Multi-threading
+- [ ] SPIRV-reflect
+- [ ] Reconstruct world position from depth in compute shader

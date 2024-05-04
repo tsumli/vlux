@@ -12,8 +12,9 @@ void CreateImage(const uint32_t width, const uint32_t height, VkFormat format,
                  VkDeviceMemory& image_memory, const VkDevice device,
                  const VkPhysicalDevice physical_device);
 
-VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags,
-                            const VkDevice device);
+VkImageView CreateImageView(const VkImage image, const VkFormat format,
+                            const VkImageViewCreateFlags create_flags,
+                            VkImageAspectFlags aspect_flags, const VkDevice device);
 
 void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_t width,
                        const uint32_t height, const VkQueue graphics_queue,
@@ -24,10 +25,11 @@ class Image {
     Image(const std::filesystem::path& path) {
         auto pixels =
             stbi_load(path.string().c_str(), &width_, &height_, &channels_, STBI_rgb_alpha);
+
         if (!pixels) {
             throw std::runtime_error("failed to load texture image!");
         }
-        pixels_ = std::vector<unsigned char>(pixels, pixels + width_ * height_ * 4);
+        pixels_ = std::vector<uint8_t>(pixels, pixels + width_ * height_ * 4);
         stbi_image_free(pixels);
     }
 
@@ -36,7 +38,7 @@ class Image {
         assert(static_cast<size_t>(height_ * width_ * channels_) == pixels.size());
     }
 
-    ~Image() {}
+    ~Image() = default;
 
     int GetWidth() const { return width_; }
     int GetHeight() const { return height_; }

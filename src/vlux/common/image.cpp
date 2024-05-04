@@ -1,5 +1,7 @@
 #include "image.h"
 
+#include <vulkan/vulkan_core.h>
+
 #include "common/utils.h"
 #include "device_resource/barrier.h"
 
@@ -44,10 +46,12 @@ void CreateImage(const uint32_t width, const uint32_t height, VkFormat format,
     vkBindImageMemory(device, image, image_memory, 0);
 }
 
-VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags,
-                            const VkDevice device) {
+VkImageView CreateImageView(const VkImage image, const VkFormat format,
+                            const VkImageViewCreateFlags create_flags,
+                            VkImageAspectFlags aspect_flags, const VkDevice device) {
     const auto view_info = VkImageViewCreateInfo{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .flags = create_flags,
         .image = image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = format,

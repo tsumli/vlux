@@ -1,7 +1,8 @@
 #include "app.h"
 
-#include <vulkan/vulkan_core.h>
+#include <glm/gtc/type_ptr.hpp>
 
+#include "camera.h"
 #include "common/command_buffer.h"
 #include "common/queue.h"
 #include "control.h"
@@ -9,6 +10,7 @@
 #include "draw/rasterize/rasterize.h"
 #include "gui.h"
 #include "imgui.h"
+#include "light.h"
 #include "model/gltf.h"
 #include "model/model.h"
 #include "uniform_buffer.h"
@@ -17,7 +19,11 @@ namespace vlux {
 App::App(DeviceResource& device_resource)
     : device_resource_(device_resource),
       transform_ubo_(device_resource_.GetDevice().GetVkDevice(),
-                     device_resource_.GetVkPhysicalDevice()) {
+                     device_resource_.GetVkPhysicalDevice()),
+      camera_ubo_(device_resource_.GetDevice().GetVkDevice(),
+                  device_resource_.GetVkPhysicalDevice()),
+      light_ubo_(device_resource_.GetDevice().GetVkDevice(),
+                 device_resource_.GetVkPhysicalDevice()) {
     const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto physical_device = device_resource_.GetVkPhysicalDevice();
 
@@ -36,9 +42,16 @@ App::App(DeviceResource& device_resource)
     const auto [width, height] = device_resource.GetWindow().GetWindowSize();
     camera_.emplace(glm::vec3{80.0f, 20.0f, -12.0f}, glm::vec3{0.0f, 0.0f, 0.0f}, width, height);
 
+    // setup obejets
+    lights_.emplace_back(LightParams{
+        .pos = glm::vec4(80.0f, 40.0f, -12.0f, 0.0f),
+        .range = 100.0f,
+        .color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
+    });
+
     // setup draw
-    draw_ = std::make_unique<draw::rasterize::DrawRasterize>(transform_ubo_, scene_.value(),
-                                                             device_resource_);
+    draw_ = std::make_unique<draw::rasterize::DrawRasterize>(
+        transform_ubo_, camera_ubo_, light_ubo_, scene_.value(), device_resource_);
 
     // Setup GUI
     const auto queue_family = FindQueueFamilies(device_resource_.GetVkPhysicalDevice(),
@@ -197,9 +210,16 @@ void App::DrawFrame() {
 
     spdlog::debug("update ubo");
     [&]() {
-        auto transform = camera_->CreateTransformParams();
-        transform_ubo_.UpdateUniformBuffer(transform, image_idx);
+        const auto transform_params = camera_->CreateTransformParams();
+        transform_ubo_.UpdateUniformBuffer(transform_params, image_idx);
     }();
+    [&]() {
+        const auto camera_params = CameraParams{
+            .position = glm::vec4(camera_->GetPosition(), 1.0f),
+        };
+        camera_ubo_.UpdateUniformBuffer(camera_params, image_idx);
+    }();
+    [&]() { light_ubo_.UpdateUniformBuffer(lights_.at(0), image_idx); }();
 
     spdlog::debug("draw frame");
     [&]() {
@@ -358,6 +378,19 @@ void App::DrawFrame() {
         ImGui::Begin("Control");
         ImGui::InputFloat("Mouse sens", &mouse_config_.sens);
         ImGui::End();
+
+        ImGui::Begin("Render");
+        auto mode = static_cast<int>(draw_->GetMode());
+        ImGui::InputInt("Mode", &mode);
+        draw_->SetMode(static_cast<uint32_t>(mode));
+        ImGui::End();
+
+        ImGui::Begin("Light");
+        ImGui::SliderFloat3("pos", glm::value_ptr(lights_.at(0).pos), -100.0f, 100.0f);
+        ImGui::InputFloat("range", &lights_.at(0).range);
+        ImGui::ColorPicker4("color", glm::value_ptr(lights_.at(0).color));
+        ImGui::End();
+
         gui_->Render(command_buffer, swapchain.GetWidth(), swapchain.GetHeight(), image_idx);
     }();
 

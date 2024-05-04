@@ -10,6 +10,7 @@
 #include "draw/draw_strategy.h"
 #include "frame_timer.h"
 #include "gui.h"
+#include "light.h"
 #include "scene/scene.h"
 #include "transform.h"
 #include "uniform_buffer.h"
@@ -45,6 +46,11 @@ class App {
 
     // UBO
     UniformBuffer<TransformParams> transform_ubo_;
+    UniformBuffer<CameraParams> camera_ubo_;
+    UniformBuffer<LightParams> light_ubo_;
+
+    // objects
+    std::vector<LightParams> lights_;
 
     // Draw
     std::unique_ptr<draw::DrawStrategy> draw_ = nullptr;

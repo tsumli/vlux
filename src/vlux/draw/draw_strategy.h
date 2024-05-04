@@ -14,6 +14,9 @@ class DrawStrategy {
                                      const VkCommandBuffer command_buffer) = 0;
     virtual void OnRecreateSwapChain(const DeviceResource& device_resource) = 0;
     virtual const RenderTarget& GetOutputRenderTarget() const = 0;
+
+    virtual void SetMode(const uint32_t mode) = 0;
+    virtual uint32_t GetMode() const = 0;
 };
 }  // namespace vlux::draw
 

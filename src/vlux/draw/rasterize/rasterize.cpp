@@ -2,8 +2,12 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <cstdint>
+#include <exception>
+#include <memory>
+
+#include "common/descriptor_set_layout.h"
 #include "common/texture_view.h"
-#include "common/utils.h"
 #include "device_resource/device_resource.h"
 #include "pch.h"
 #include "scene/scene.h"
@@ -13,9 +17,15 @@
 #include "uniform_buffer.h"
 
 namespace vlux::draw::rasterize {
-DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo, Scene& scene,
+namespace {
+constexpr auto kNumDescriptorSetCompute = 3;
+}
+
+DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo,
+                             const UniformBuffer<CameraParams>& camera_ubo,
+                             const UniformBuffer<LightParams>& light_ubo, Scene& scene,
                              const DeviceResource& device_resource)
-    : scene_(scene), transform_ubo_(transform_ubo) {
+    : scene_(scene) {
     const auto device = device_resource.GetDevice().GetVkDevice();
     const auto physical_device = device_resource.GetVkPhysicalDevice();
     const auto [width, height] = device_resource.GetWindow().GetWindowSize();
@@ -30,7 +40,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                         VK_IMAGE_USAGE_SAMPLED_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color.GetVkImageRef(),
                     color.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(color.GetVkImageRef(), color.GetVkFormat(),
+        const auto image_view = CreateImageView(color.GetVkImageRef(), color.GetVkFormat(), 0,
                                                 VK_IMAGE_ASPECT_COLOR_BIT, device);
         color.SetImageView(image_view);
     }();
@@ -45,47 +55,60 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                         VK_IMAGE_USAGE_SAMPLED_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, normal.GetVkImageRef(),
                     normal.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(normal.GetVkImageRef(), normal.GetVkFormat(),
+        const auto image_view = CreateImageView(normal.GetVkImageRef(), normal.GetVkFormat(), 0,
                                                 VK_IMAGE_ASPECT_COLOR_BIT, device);
         normal.SetImageView(image_view);
-    }();
-
-    // Finalized
-    [&]() {
-        render_targets_[RenderTargetType::kFinalized].emplace(device);
-        auto& finalized = render_targets_.at(RenderTargetType::kFinalized).value();
-        finalized.SetFormat(VK_FORMAT_R8G8B8A8_UNORM);
-        CreateImage(width, height, finalized.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, finalized.GetVkImageRef(),
-                    finalized.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(finalized.GetVkImageRef(), finalized.GetVkFormat(),
-                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
-        finalized.SetImageView(image_view);
     }();
 
     // Depth Stencil
     [&]() {
         render_targets_[RenderTargetType::kDepthStencil].emplace(device);
         auto& depth_stencil = render_targets_.at(RenderTargetType::kDepthStencil).value();
-        const auto candidates = std::vector<VkFormat>({
-            VK_FORMAT_D32_SFLOAT,
-            VK_FORMAT_D32_SFLOAT_S8_UINT,
-            VK_FORMAT_D24_UNORM_S8_UINT,
-        });
-        const auto format =
-            FindSupportedFormat(candidates, VK_IMAGE_TILING_OPTIMAL,
-                                VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, physical_device);
-        depth_stencil.SetFormat(format);
+        depth_stencil.SetFormat(VK_FORMAT_D32_SFLOAT);
         CreateImage(width, height, depth_stencil.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_stencil.GetVkImageRef(),
                     depth_stencil.GetVkDeviceMemoryRef(), device, physical_device);
         const auto image_view =
-            CreateImageView(depth_stencil.GetVkImageRef(), depth_stencil.GetVkFormat(),
+            CreateImageView(depth_stencil.GetVkImageRef(), depth_stencil.GetVkFormat(), 0,
                             VK_IMAGE_ASPECT_DEPTH_BIT, device);
         depth_stencil.SetImageView(image_view);
+    }();
+
+    // Position
+    [&]() {
+        render_targets_[RenderTargetType::kPosition].emplace(device);
+        auto& position = render_targets_.at(RenderTargetType::kPosition).value();
+        position.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, position.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, position.GetVkImageRef(),
+                    position.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(position.GetVkImageRef(), position.GetVkFormat(), 0,
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        position.SetImageView(image_view);
+    }();
+
+    // Finalized
+    [&]() {
+        render_targets_[RenderTargetType::kFinalized].emplace(device);
+        auto& finalized = render_targets_.at(RenderTargetType::kFinalized).value();
+        finalized.SetFormat(VK_FORMAT_B8G8R8A8_UNORM);
+        CreateImage(width, height, finalized.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, finalized.GetVkImageRef(),
+                    finalized.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(finalized.GetVkImageRef(), finalized.GetVkFormat(),
+                                                0, VK_IMAGE_ASPECT_COLOR_BIT, device);
+        finalized.SetImageView(image_view);
+    }();
+
+    // texture sampler
+    [&]() {
+        texture_samplers_[TextureSamplerType::kColor].emplace(physical_device, device);
+        texture_samplers_[TextureSamplerType::kNormal].emplace(physical_device, device);
     }();
 
     // DescriptorSetLayout
@@ -175,12 +198,23 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             },
+            // Position
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kPosition)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
             // Depth
             VkAttachmentDescription{
                 .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -190,17 +224,24 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
         auto subpass = std::vector<VkSubpassDescription>();
         constexpr auto kColorAttachmentRef = std::to_array<VkAttachmentReference>({
+            // color
             {
                 .attachment = 0,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            // normal
             {
                 .attachment = 1,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            // position
+            {
+                .attachment = 2,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
         });
         constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
-            .attachment = 2,
+            .attachment = 3,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
         subpass.emplace_back(VkSubpassDescription{
@@ -319,10 +360,21 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
             },
-
             // Normal
             VkPipelineColorBlendAttachmentState{
-                .blendEnable = VK_TRUE,
+                .blendEnable = VK_FALSE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
+            // Position
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_FALSE,
                 .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
                 .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
                 .colorBlendOp = VK_BLEND_OP_ADD,
@@ -376,7 +428,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .subpass = 0,
             .basePipelineHandle = VK_NULL_HANDLE,
         };
-
         graphics_pipeline_.emplace(device, pipeline_info);
     }();
 
@@ -391,14 +442,11 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             const auto alloc_info = VkDescriptorSetAllocateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                 .descriptorPool = graphics_descriptor_pool_->GetVkDescriptorPool(),
-                .descriptorSetCount = static_cast<uint32_t>(scene.GetModels().size()),
+                .descriptorSetCount = static_cast<uint32_t>(descriptor_set_layout.size()),
                 .pSetLayouts = descriptor_set_layout.data(),
             };
             graphics_descriptor_sets_.emplace_back(device, alloc_info);
         }
-
-        // texture sampler
-        texture_sampler_ = std::make_shared<TextureSampler>(physical_device, device);
 
         // update descriptor sets
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
@@ -432,16 +480,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .pBufferInfo = &transform_ubo_buffer_info,
                 });
                 if (texture_view.has_value()) {
-                    const auto create_image_info = [&](const VkImageView image_view) {
-                        return VkDescriptorImageInfo{
-                            .sampler = texture_sampler_->GetSampler(),
-                            .imageView = image_view,
-                            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        };
-                    };
-
                     // color
-                    const auto color_image_info = create_image_info(texture_view->color);
+                    const auto color_image_info = VkDescriptorImageInfo{
+                        .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
+                        .imageView = texture_view->color,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    };
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                         .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
@@ -453,7 +497,11 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     });
 
                     // normal
-                    const auto normal_image_info = create_image_info(texture_view->normal);
+                    const auto normal_image_info = VkDescriptorImageInfo{
+                        .sampler = texture_samplers_.at(TextureSamplerType::kNormal)->GetSampler(),
+                        .imageView = texture_view->normal,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    };
                     descriptor_write.emplace_back(VkWriteDescriptorSet{
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                         .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
@@ -471,147 +519,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         }
     }();
 
-    // DescriptorPool
-    [&]() {
-        const auto pool_sizes = std::to_array({
-            // color + normal + finalized
-            VkDescriptorPoolSize{
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 3,
-            },
-        });
-        const auto pool_info = VkDescriptorPoolCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = kMaxFramesInFlight,
-            .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
-            .pPoolSizes = pool_sizes.data(),
-        };
-        compute_descriptor_pool_.emplace(device, pool_info);
-    }();
-
-    // DescriptorSetLayout (Compute)
-    [&]() {
-        constexpr auto kLayoutBindings = std::to_array({
-            // color
-            VkDescriptorSetLayoutBinding{
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-            // normal
-            VkDescriptorSetLayoutBinding{
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-            // output
-            VkDescriptorSetLayoutBinding{
-                .binding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-        });
-        const auto layout_info = VkDescriptorSetLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
-            .pBindings = kLayoutBindings.data(),
-        };
-        compute_descriptor_set_layout_.emplace(device, layout_info);
-    }();
-
-    // PipelineLayout (Compute)
-    [&]() {
-        const auto set_layout = compute_descriptor_set_layout_->GetVkDescriptorSetLayout();
-        const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts = &set_layout,
-        };
-        compute_pipeline_layout_.emplace(device, pipeline_layout_info);
-    }();
-
-    // ComputePipeline
-    [&]() {
-        const auto comp_path = std::filesystem::path("rasterize/deferred.comp.spv");
-        const auto comp_shader = Shader(comp_path, VK_SHADER_STAGE_COMPUTE_BIT, device);
-        const auto pipeline_info = VkComputePipelineCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .stage = comp_shader.GetStageInfo(),
-            .layout = compute_pipeline_layout_->GetVkPipelineLayout(),
-        };
-        compute_pipeline_.emplace(device, pipeline_info);
-    }();
-
-    // DescriptorSets (Compute)
-    [&]() {
-        // allocate descriptor sets
-        compute_descriptor_sets_.reserve(kMaxFramesInFlight);
-        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            const auto descriptor_set_layout =
-                compute_descriptor_set_layout_->GetVkDescriptorSetLayout();
-            const auto alloc_info = VkDescriptorSetAllocateInfo{
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                .descriptorPool = compute_descriptor_pool_->GetVkDescriptorPool(),
-                .descriptorSetCount = 1,
-                .pSetLayouts = &descriptor_set_layout,
-            };
-            compute_descriptor_sets_.emplace_back(device, alloc_info);
-        }
-
-        // update descriptor sets
-        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            const auto color_image_info = VkDescriptorImageInfo{
-                .imageView = render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            };
-            const auto normal_image_info = VkDescriptorImageInfo{
-                .imageView = render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            };
-            const auto finalized_image_info = VkDescriptorImageInfo{
-                .imageView = render_targets_.at(RenderTargetType::kFinalized)->GetVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            };
-            const auto descriptor_write = std::to_array({
-                VkWriteDescriptorSet{
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
-                    .dstBinding = 0,
-                    .dstArrayElement = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &color_image_info,
-                },
-                VkWriteDescriptorSet{
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
-                    .dstBinding = 1,
-                    .dstArrayElement = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &normal_image_info,
-                },
-                VkWriteDescriptorSet{
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
-                    .dstBinding = 2,
-                    .dstArrayElement = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &finalized_image_info,
-                },
-            });
-            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
-                                   descriptor_write.data(), 0, nullptr);
-        }
-    }();
-
     // FrameBuffer
     [&]() {
         framebuffer_.reserve(kMaxFramesInFlight);
@@ -619,6 +526,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             const auto attachments = std::to_array(
                 {render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -630,6 +538,317 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .layers = 1,
             };
             framebuffer_.emplace_back(device, framebuffer_info);
+        }
+    }();
+
+    // DescriptorPool (Compute)
+    [&]() {
+        const auto pool_sizes = std::to_array({
+            // transform + camera
+            VkDescriptorPoolSize{
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 2,
+            },
+            // depth
+            VkDescriptorPoolSize{
+                .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
+            },
+            // color + normal + position + finalized
+            VkDescriptorPoolSize{
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 4,
+            },
+        });
+
+        const auto pool_info = VkDescriptorPoolCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = kMaxFramesInFlight * kNumDescriptorSetCompute,
+            .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
+            .pPoolSizes = pool_sizes.data(),
+        };
+        compute_descriptor_pool_.emplace(device, pool_info);
+    }();
+
+    // DescriptorSetLayout (Compute)
+    [&]() {
+        compute_descriptor_set_layout_.reserve(kNumDescriptorSetCompute);
+
+        // set = 0
+        {
+            constexpr auto kLayoutBindings = std::to_array({
+                // transform
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                VkDescriptorSetLayoutBinding{
+                    .binding = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+            });
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+
+            compute_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
+        // set = 1
+        {
+            constexpr auto kLayoutBindings = std::to_array({
+                // color
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // normal
+                VkDescriptorSetLayoutBinding{
+                    .binding = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // position
+                VkDescriptorSetLayoutBinding{
+                    .binding = 2,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // depth
+                VkDescriptorSetLayoutBinding{
+                    .binding = 3,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // output
+                VkDescriptorSetLayoutBinding{
+                    .binding = 4,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+            });
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+
+            compute_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
+
+        // set = 2
+        {
+            constexpr auto kLayoutBindings = std::to_array({
+                // light
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+            });
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+
+            compute_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
+    }();
+
+    // PipelineLayout (Compute)
+    [&]() {
+        constexpr auto kPushConstantRanges = std::to_array({VkPushConstantRange{
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .offset = 0,
+            .size = sizeof(ModePushConstants),
+        }});
+        compute_pipeline_layout_.reserve(kMaxFramesInFlight);
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            auto set_layout = std::vector<VkDescriptorSetLayout>();
+            set_layout.reserve(compute_descriptor_set_layout_.size());
+            for (const auto& layout : compute_descriptor_set_layout_) {
+                set_layout.emplace_back(layout.GetVkDescriptorSetLayout());
+            }
+            const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .setLayoutCount = static_cast<uint32_t>(set_layout.size()),
+                .pSetLayouts = set_layout.data(),
+                .pushConstantRangeCount = static_cast<uint32_t>(kPushConstantRanges.size()),
+                .pPushConstantRanges = kPushConstantRanges.data(),
+            };
+            compute_pipeline_layout_.emplace_back(device, pipeline_layout_info);
+        }
+    }();
+
+    // ComputePipeline
+    [&]() {
+        compute_pipeline_.reserve(kMaxFramesInFlight);
+        const auto comp_path = std::filesystem::path("rasterize/deferred.comp.spv");
+        const auto comp_shader = Shader(comp_path, VK_SHADER_STAGE_COMPUTE_BIT, device);
+
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto pipeline_info = VkComputePipelineCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+                .stage = comp_shader.GetStageInfo(),
+                .layout = compute_pipeline_layout_.at(frame_i).GetVkPipelineLayout(),
+            };
+            compute_pipeline_.emplace_back(device, pipeline_info);
+        }
+    }();
+
+    // DescriptorSets (Compute)
+    [&]() {
+        // allocate descriptor sets
+        compute_descriptor_sets_.reserve(kMaxFramesInFlight);
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            auto set_layout = std::vector<VkDescriptorSetLayout>();
+            set_layout.reserve(compute_descriptor_set_layout_.size());
+            for (const auto& layout : compute_descriptor_set_layout_) {
+                set_layout.emplace_back(layout.GetVkDescriptorSetLayout());
+            }
+            const auto alloc_info = VkDescriptorSetAllocateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = compute_descriptor_pool_->GetVkDescriptorPool(),
+                .descriptorSetCount = static_cast<uint32_t>(set_layout.size()),
+                .pSetLayouts = set_layout.data(),
+            };
+            compute_descriptor_sets_.emplace_back(device, alloc_info);
+        }
+
+        // update descriptor sets
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
+                .offset = 0,
+                .range = transform_ubo.GetUniformBufferObjectSize(),
+            };
+            const auto camera_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = camera_ubo.GetVkUniformBuffer(frame_i),
+                .offset = 0,
+                .range = camera_ubo.GetUniformBufferObjectSize(),
+            };
+            const auto color_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
+            const auto normal_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
+            const auto position_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
+            const auto depth_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+            };
+            const auto finalized_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kFinalized)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
+            const auto light_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = light_ubo.GetVkUniformBuffer(frame_i),
+                .offset = 0,
+                .range = light_ubo.GetUniformBufferObjectSize(),
+            };
+            const auto descriptor_write = std::to_array({
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
+                    .dstBinding = 0,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &transform_ubo_buffer_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
+                    .dstBinding = 1,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &camera_ubo_buffer_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 0,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &color_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 1,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &normal_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 2,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &position_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 3,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .pImageInfo = &depth_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 4,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &finalized_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(2),
+                    .dstBinding = 0,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &light_ubo_buffer_info,
+                },
+            });
+            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
+                                   descriptor_write.data(), 0, nullptr);
         }
     }();
 }
@@ -650,6 +869,13 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
             .color =
                 {
                     {0.0f, 0.0f, 0.0f, 1.0f},
+                },
+        },
+        // Position
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 0.0f},
                 },
         },
         // Depth Stencil
@@ -713,6 +939,32 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
 
     // compute
     spdlog::debug("Compute");
+    // Transition
+    [&]() {
+        // depth
+        const auto barrier = VkImageMemoryBarrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImage(),
+            .subresourceRange =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+        };
+        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                             VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                             &barrier);
+    }();
+
     [&]() {
         const auto div_up = [](const uint32_t x, const uint32_t y) -> uint32_t {
             return (x + y - 1) / y;
@@ -721,13 +973,17 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
         const auto group_count_x = div_up(swapchain_extent.width, 16);
         const auto group_count_y = div_up(swapchain_extent.height, 16);
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                          compute_pipeline_->GetVkComputePipeline());
-        const auto descriptor_set =
-            std::to_array({compute_descriptor_sets_.at(image_idx).GetVkDescriptorSet(0)});
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                compute_pipeline_layout_->GetVkPipelineLayout(), 0,
-                                static_cast<uint32_t>(descriptor_set.size()), descriptor_set.data(),
-                                0, nullptr);
+                          compute_pipeline_.at(image_idx).GetVkComputePipeline());
+
+        const auto mode = ModePushConstants{.mode = mode_};
+        vkCmdPushConstants(command_buffer,
+                           compute_pipeline_layout_.at(image_idx).GetVkPipelineLayout(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ModePushConstants), &mode);
+        vkCmdBindDescriptorSets(
+            command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+            compute_pipeline_layout_.at(image_idx).GetVkPipelineLayout(), 0,
+            static_cast<uint32_t>(compute_descriptor_sets_.at(image_idx).GetSize()),
+            compute_descriptor_sets_.at(image_idx).GetVkDescriptorSetPtr(), 0, nullptr);
         vkCmdDispatch(command_buffer, group_count_x, group_count_y, 1);
     }();
 }

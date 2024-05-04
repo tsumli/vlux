@@ -21,7 +21,7 @@ Instance::Instance() {
         .applicationVersion = VK_MAKE_VERSION(0, 0, 0),
         .pEngineName = "Vlux Engine",
         .engineVersion = VK_MAKE_VERSION(0, 0, 0),
-        .apiVersion = VK_API_VERSION_1_0,
+        .apiVersion = VK_API_VERSION_1_3,
     };
     const auto debug_create_info = CreateDebugMessengerCreateInfo();
     const auto extensions = GetRequiredExtensions();

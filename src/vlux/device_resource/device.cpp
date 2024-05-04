@@ -3,6 +3,12 @@
 #include "swapchain.h"
 
 namespace vlux {
+namespace {
+constexpr auto kDeviceExtensions = std::to_array<const char*>({
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+});
+}
+
 bool CheckDeviceExtensionSupport(VkPhysicalDevice physical_device) {
     uint32_t extension_count;
     vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, nullptr);
@@ -31,7 +37,7 @@ bool IsDeviceSuitable(const VkPhysicalDevice physical_device, const VkSurfaceKHR
             !swapchain_support.formats.empty() && !swapchain_support.present_modes.empty();
     }
 
-    VkPhysicalDeviceFeatures supported_features;
+    auto supported_features = VkPhysicalDeviceFeatures{};
     vkGetPhysicalDeviceFeatures(physical_device, &supported_features);
 
     return indices.IsComplete() && extensions_supported && swapchain_adequate &&
@@ -58,7 +64,8 @@ Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surfac
         return queue_create_infos;
     }();
 
-    const auto device_features = VkPhysicalDeviceFeatures{
+    constexpr auto kDeviceFeatures = VkPhysicalDeviceFeatures{
+        .independentBlend = VK_TRUE,
         .samplerAnisotropy = VK_TRUE,
     };
 
@@ -70,7 +77,7 @@ Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surfac
         .ppEnabledLayerNames = kValidationLayers.data(),
         .enabledExtensionCount = static_cast<uint32_t>(kDeviceExtensions.size()),
         .ppEnabledExtensionNames = kDeviceExtensions.data(),
-        .pEnabledFeatures = &device_features,
+        .pEnabledFeatures = &kDeviceFeatures,
     };
 
     if (vkCreateDevice(physical_device, &create_info, nullptr, &device_) != VK_SUCCESS) {
