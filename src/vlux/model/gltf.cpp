@@ -185,18 +185,35 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         return texture.source;
     };
 
-    const auto create_texture = [&](const auto image_idx) {
+    const auto create_image = [&](const auto image_idx) {
         const auto& image = model.images[image_idx];
-        return std::make_shared<Texture>(
-            Image(image.image, image.width, image.height, image.component), graphics_queue,
-            command_pool, device, physical_device);
+        return Image(image.image, image.width, image.height, image.component);
     };
 
-    const auto base_color_idx = material.pbrMetallicRoughness.baseColorTexture.index;
-    auto base_color_texture =
-        base_color_idx != -1 ? create_texture(get_image_idx(base_color_idx)) : nullptr;
-    const auto normal_idx = material.normalTexture.index;
-    auto normal_texture = normal_idx != -1 ? create_texture(get_image_idx(normal_idx)) : nullptr;
+    const auto create_texture = [&](const auto& image) {
+        return std::make_shared<Texture>(image, graphics_queue, command_pool, device,
+                                         physical_device);
+    };
+
+    auto base_color_texture = [&]() -> std::shared_ptr<Texture> {
+        const auto idx = material.pbrMetallicRoughness.baseColorTexture.index;
+        if (idx == -1) {
+            spdlog::debug("base color texture not found");
+            return nullptr;
+        }
+        const auto image = create_image(get_image_idx(idx));
+        return create_texture(image);
+    }();
+
+    auto normal_texture = [&]() -> std::shared_ptr<Texture> {
+        const auto idx = material.normalTexture.index;
+        if (idx == -1) {
+            spdlog::debug("normal texture not found");
+            return nullptr;
+        }
+        auto image = create_image(get_image_idx(idx));
+        return create_texture(image);
+    }();
 
     return {
         .indices = indices,

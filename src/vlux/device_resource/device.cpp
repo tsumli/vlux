@@ -65,6 +65,7 @@ Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surfac
     }();
 
     constexpr auto kDeviceFeatures = VkPhysicalDeviceFeatures{
+        .independentBlend = VK_TRUE,
         .samplerAnisotropy = VK_TRUE,
     };
 

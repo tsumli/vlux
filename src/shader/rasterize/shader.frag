@@ -1,10 +1,11 @@
 #version 460
 
-struct FragInput{
+struct FragInput {
     vec4 position_cs;
+    vec4 position_ws;
     vec3 normal_ws;
     vec2 texcoord;
-    vec3 tangent_ws ;
+    vec3 tangent_ws;
     vec3 bitangent_ws;
 };
 
@@ -15,6 +16,7 @@ layout(location = 0) in FragInput frag_input;
 
 layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec4 out_normal;
+layout(location = 2) out vec4 out_position;
 
 void main() {
     // Texture Loading
@@ -22,12 +24,12 @@ void main() {
     normal_ts = normalize(normal_ts * 2.0f - 1.0f);
 
     // TBN matrix
-    mat3x3 tangent_frame_ws = mat3x3(
-        normalize(frag_input.tangent_ws),
-        normalize(frag_input.bitangent_ws),
-        normalize(frag_input.normal_ws));
+    mat3x3 tangent_frame_ws =
+        mat3x3(normalize(frag_input.tangent_ws), normalize(frag_input.bitangent_ws),
+               normalize(frag_input.normal_ws));
     vec3 normal_ws = tangent_frame_ws * normal_ts;
 
     out_color = texture(color_sampler, frag_input.texcoord);
-    out_normal = vec4(normal_ts, 0.0);
+    out_normal = vec4(normal_ws, 0.0);
+    out_position = frag_input.position_ws;
 }

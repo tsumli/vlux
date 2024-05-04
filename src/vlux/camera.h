@@ -6,9 +6,7 @@
 
 namespace vlux {
 struct CameraParams {
-    alignas(16) glm::mat4 world;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 proj;
+    alignas(16) glm::vec4 position;
 };
 
 class Camera {
@@ -29,13 +27,6 @@ class Camera {
     glm::mat4x4 CreateViewMatrix() const;
 
     TransformParams CreateTransformParams();
-    CameraParams CreateCameraParams() {
-        return {
-            .world = world_matrix_,
-            .view = CreateViewMatrix(),
-            .proj = proj_matrix_,
-        };
-    }
 
    private:
     glm::vec3 pos_{};

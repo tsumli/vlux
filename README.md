@@ -59,3 +59,4 @@ or you can just use VSCode to launch.
 - [ ] Mesh shader
 - [ ] Multi-threading
 - [ ] SPIRV-reflect
+- [ ] Reconstruct world position from depth in compute shader

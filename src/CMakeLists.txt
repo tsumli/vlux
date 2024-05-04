@@ -1,11 +1,14 @@
 set(LIB_SRC
+    # ./
     vlux/app.cpp
     vlux/camera.cpp
     vlux/control.cpp
     vlux/frame_timer.cpp
     vlux/gui.cpp
+    vlux/light.cpp
     vlux/transform.cpp
     vlux/uniform_buffer.cpp
+    # ./common
     vlux/common/buffer.cpp
     vlux/common/command_buffer.cpp
     vlux/common/command_pool.cpp
@@ -21,6 +24,7 @@ set(LIB_SRC
     vlux/common/render_pass.cpp
     vlux/common/render_target.cpp
     vlux/common/utils.cpp
+    # ./device_resource
     vlux/device_resource/barrier.cpp
     vlux/device_resource/debug_messenger.cpp
     vlux/device_resource/device.cpp
@@ -30,18 +34,24 @@ set(LIB_SRC
     vlux/device_resource/sync_object.cpp
     vlux/device_resource/surface.cpp
     vlux/device_resource/window.cpp
+    # ./draw
     vlux/draw/draw_strategy.cpp
     vlux/draw/rasterize/rasterize.cpp
     vlux/draw/raytracing/raytracing.cpp
+    # ./model
     vlux/model/index.cpp
     vlux/model/gltf.cpp
     vlux/model/model.cpp
     vlux/model/vertex.cpp
+    # ./postprocess
     vlux/postprocess/tonemapping.cpp
+    # ./scene
     vlux/scene/scene.cpp
     vlux/shader/shader.cpp
+    # ./texture
     vlux/texture/texture.cpp
     vlux/texture/texture_sampler.cpp
+    # ./utils
     vlux/utils/debug.h
     vlux/utils/io.h
     vlux/utils/string.h

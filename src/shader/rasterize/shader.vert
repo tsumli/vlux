@@ -7,15 +7,14 @@ struct TransformParams {
     mat4x4 proj_to_world;
 };
 
-layout(set = 0, binding = 0) uniform ubo {
-    TransformParams transform;
-};
+layout(set = 0, binding = 0) uniform ubo { TransformParams transform; };
 
-struct FragInput{
+struct FragInput {
     vec4 position_cs;
+    vec4 position_ws;
     vec3 normal_ws;
     vec2 texcoord;
-    vec3 tangent_ws ;
+    vec3 tangent_ws;
     vec3 bitangent_ws;
 };
 
@@ -32,10 +31,12 @@ void main() {
 
     // Reconstruct the rest of the tangent frame
     frag_input.tangent_ws = normalize(mat3x3(transform.world) * in_tangent.xyz);
-    frag_input.bitangent_ws = normalize(cross(frag_input.normal_ws, frag_input.tangent_ws)) * in_tangent.w;
+    frag_input.bitangent_ws =
+        normalize(cross(frag_input.normal_ws, frag_input.tangent_ws)) * in_tangent.w;
 
     // Calculate the clip-space position
     frag_input.position_cs = transform.world_view_proj * vec4(in_position, 1.0);
+    frag_input.position_ws = transform.world * vec4(in_position, 1.0);
 
     // Pass through the rest of the data
     frag_input.texcoord = in_uv;

@@ -1,8 +1,10 @@
 #ifndef DRAW_RASTERIZE_H
 #define DRAW_RASTERIZE_H
 
+#include "light.h"
 #include "pch.h"
 //
+#include "camera.h"
 #include "common/compute_pipeline.h"
 #include "common/descriptor_pool.h"
 #include "common/descriptor_set_layout.h"
@@ -20,9 +22,15 @@
 
 namespace vlux::draw::rasterize {
 
+struct ModePushConstants {
+    uint32_t mode;
+};
+
 class DrawRasterize final : public DrawStrategy {
    public:
-    DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo, Scene& scene,
+    DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo,
+                  const UniformBuffer<CameraParams>& camera_ubo,
+                  const UniformBuffer<LightParams>& light_ubo, Scene& scene,
                   const DeviceResource& device_resource);
     ~DrawRasterize() override = default;
 
@@ -38,9 +46,11 @@ class DrawRasterize final : public DrawStrategy {
         return render_targets_.at(RenderTargetType::kFinalized).value();
     }
 
+    void SetMode(const uint32_t mode) override { mode_ = mode; }
+    uint32_t GetMode() const override { return mode_; }
+
    private:
     const Scene& scene_;
-    const UniformBuffer<TransformParams>& transform_ubo_;
 
     std::optional<RenderPass> render_pass_;
 
@@ -59,9 +69,14 @@ class DrawRasterize final : public DrawStrategy {
     std::vector<FrameBuffer> framebuffer_;
 
     // render targets
-    enum class RenderTargetType { kColor, kNormal, kDepthStencil, kFinalized, kCount };
+    enum class RenderTargetType { kColor, kNormal, kDepthStencil, kPosition, kFinalized, kCount };
     std::unordered_map<RenderTargetType, std::optional<RenderTarget>> render_targets_;
-    std::unordered_map<RenderTargetType, std::optional<TextureSampler>> texture_samplers_;
+
+    enum class TextureSamplerType { kColor, kNormal, kCount };
+    std::unordered_map<TextureSamplerType, std::optional<TextureSampler>> texture_samplers_;
+
+    // mode
+    uint32_t mode_{0};
 };
 }  // namespace vlux::draw::rasterize
 

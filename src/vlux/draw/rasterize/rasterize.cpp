@@ -2,11 +2,12 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <cstdint>
+#include <exception>
 #include <memory>
 
 #include "common/descriptor_set_layout.h"
 #include "common/texture_view.h"
-#include "common/utils.h"
 #include "device_resource/device_resource.h"
 #include "pch.h"
 #include "scene/scene.h"
@@ -17,12 +18,14 @@
 
 namespace vlux::draw::rasterize {
 namespace {
-constexpr auto kNumDescriptorSetCompute = 2;
+constexpr auto kNumDescriptorSetCompute = 3;
 }
 
-DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo, Scene& scene,
+DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo,
+                             const UniformBuffer<CameraParams>& camera_ubo,
+                             const UniformBuffer<LightParams>& light_ubo, Scene& scene,
                              const DeviceResource& device_resource)
-    : scene_(scene), transform_ubo_(transform_ubo) {
+    : scene_(scene) {
     const auto device = device_resource.GetDevice().GetVkDevice();
     const auto physical_device = device_resource.GetVkPhysicalDevice();
     const auto [width, height] = device_resource.GetWindow().GetWindowSize();
@@ -40,9 +43,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         const auto image_view = CreateImageView(color.GetVkImageRef(), color.GetVkFormat(), 0,
                                                 VK_IMAGE_ASPECT_COLOR_BIT, device);
         color.SetImageView(image_view);
-
-        // texture sampler
-        texture_samplers_[RenderTargetType::kColor].emplace(physical_device, device);
     }();
 
     // Normal
@@ -58,9 +58,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         const auto image_view = CreateImageView(normal.GetVkImageRef(), normal.GetVkFormat(), 0,
                                                 VK_IMAGE_ASPECT_COLOR_BIT, device);
         normal.SetImageView(image_view);
-
-        // texture sampler
-        texture_samplers_[RenderTargetType::kNormal].emplace(physical_device, device);
     }();
 
     // Depth Stencil
@@ -78,6 +75,21 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         depth_stencil.SetImageView(image_view);
     }();
 
+    // Position
+    [&]() {
+        render_targets_[RenderTargetType::kPosition].emplace(device);
+        auto& position = render_targets_.at(RenderTargetType::kPosition).value();
+        position.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, position.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, position.GetVkImageRef(),
+                    position.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(position.GetVkImageRef(), position.GetVkFormat(), 0,
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        position.SetImageView(image_view);
+    }();
+
     // Finalized
     [&]() {
         render_targets_[RenderTargetType::kFinalized].emplace(device);
@@ -91,6 +103,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         const auto image_view = CreateImageView(finalized.GetVkImageRef(), finalized.GetVkFormat(),
                                                 0, VK_IMAGE_ASPECT_COLOR_BIT, device);
         finalized.SetImageView(image_view);
+    }();
+
+    // texture sampler
+    [&]() {
+        texture_samplers_[TextureSamplerType::kColor].emplace(physical_device, device);
+        texture_samplers_[TextureSamplerType::kNormal].emplace(physical_device, device);
     }();
 
     // DescriptorSetLayout
@@ -180,6 +198,17 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             },
+            // Position
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kPosition)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
             // Depth
             VkAttachmentDescription{
                 .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
@@ -195,17 +224,24 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
         auto subpass = std::vector<VkSubpassDescription>();
         constexpr auto kColorAttachmentRef = std::to_array<VkAttachmentReference>({
+            // color
             {
                 .attachment = 0,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            // normal
             {
                 .attachment = 1,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            // position
+            {
+                .attachment = 2,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
         });
         constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
-            .attachment = 2,
+            .attachment = 3,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
         subpass.emplace_back(VkSubpassDescription{
@@ -336,6 +372,18 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
             },
+            // Position
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_FALSE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
         });
 
         const auto color_blending = [&]() {
@@ -434,7 +482,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 if (texture_view.has_value()) {
                     // color
                     const auto color_image_info = VkDescriptorImageInfo{
-                        .sampler = texture_samplers_.at(RenderTargetType::kColor)->GetSampler(),
+                        .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
                         .imageView = texture_view->color,
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     };
@@ -450,7 +498,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
                     // normal
                     const auto normal_image_info = VkDescriptorImageInfo{
-                        .sampler = texture_samplers_.at(RenderTargetType::kNormal)->GetSampler(),
+                        .sampler = texture_samplers_.at(TextureSamplerType::kNormal)->GetSampler(),
                         .imageView = texture_view->normal,
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     };
@@ -478,6 +526,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             const auto attachments = std::to_array(
                 {render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -495,11 +544,17 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // DescriptorPool (Compute)
     [&]() {
         const auto pool_sizes = std::to_array({
+            // transform + camera
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 2,
+            },
+            // depth
+            VkDescriptorPoolSize{
+                .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
             },
-            // depth + color + normal + finalized
+            // color + normal + position + finalized
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 4,
@@ -525,6 +580,13 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 // transform
                 VkDescriptorSetLayoutBinding{
                     .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                VkDescriptorSetLayoutBinding{
+                    .binding = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -558,7 +620,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .pImmutableSamplers = nullptr,
                 },
-                // depth
+                // position
                 VkDescriptorSetLayoutBinding{
                     .binding = 2,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -566,10 +628,39 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .pImmutableSamplers = nullptr,
                 },
-                // output
+                // depth
                 VkDescriptorSetLayoutBinding{
                     .binding = 3,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // output
+                VkDescriptorSetLayoutBinding{
+                    .binding = 4,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+            });
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+
+            compute_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
+
+        // set = 2
+        {
+            constexpr auto kLayoutBindings = std::to_array({
+                // light
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .pImmutableSamplers = nullptr,
@@ -587,6 +678,11 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
     // PipelineLayout (Compute)
     [&]() {
+        constexpr auto kPushConstantRanges = std::to_array({VkPushConstantRange{
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .offset = 0,
+            .size = sizeof(ModePushConstants),
+        }});
         compute_pipeline_layout_.reserve(kMaxFramesInFlight);
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
             auto set_layout = std::vector<VkDescriptorSetLayout>();
@@ -598,6 +694,8 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                 .setLayoutCount = static_cast<uint32_t>(set_layout.size()),
                 .pSetLayouts = set_layout.data(),
+                .pushConstantRangeCount = static_cast<uint32_t>(kPushConstantRanges.size()),
+                .pPushConstantRanges = kPushConstantRanges.data(),
             };
             compute_pipeline_layout_.emplace_back(device, pipeline_layout_info);
         }
@@ -640,13 +738,27 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
         // update descriptor sets
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
+                .offset = 0,
+                .range = transform_ubo.GetUniformBufferObjectSize(),
+            };
+            const auto camera_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = camera_ubo.GetVkUniformBuffer(frame_i),
+                .offset = 0,
+                .range = camera_ubo.GetUniformBufferObjectSize(),
+            };
             const auto color_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
             const auto normal_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
+            const auto position_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
             const auto depth_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView(),
@@ -654,12 +766,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             };
             const auto finalized_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kFinalized)->GetVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
-            const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
-                .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
+            const auto light_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = light_ubo.GetVkUniformBuffer(frame_i),
                 .offset = 0,
-                .range = transform_ubo.GetUniformBufferObjectSize(),
+                .range = light_ubo.GetUniformBufferObjectSize(),
             };
             const auto descriptor_write = std::to_array({
                 VkWriteDescriptorSet{
@@ -670,6 +782,15 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .pBufferInfo = &transform_ubo_buffer_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
+                    .dstBinding = 1,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &camera_ubo_buffer_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -696,7 +817,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &depth_image_info,
+                    .pImageInfo = &position_image_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -704,8 +825,26 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstBinding = 3,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .pImageInfo = &depth_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 4,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .pImageInfo = &finalized_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(2),
+                    .dstBinding = 0,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &light_ubo_buffer_info,
                 },
             });
             vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
@@ -730,6 +869,13 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
             .color =
                 {
                     {0.0f, 0.0f, 0.0f, 1.0f},
+                },
+        },
+        // Position
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 0.0f},
                 },
         },
         // Depth Stencil
@@ -829,6 +975,10 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                           compute_pipeline_.at(image_idx).GetVkComputePipeline());
 
+        const auto mode = ModePushConstants{.mode = mode_};
+        vkCmdPushConstants(command_buffer,
+                           compute_pipeline_layout_.at(image_idx).GetVkPipelineLayout(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ModePushConstants), &mode);
         vkCmdBindDescriptorSets(
             command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
             compute_pipeline_layout_.at(image_idx).GetVkPipelineLayout(), 0,

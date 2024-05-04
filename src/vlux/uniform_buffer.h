@@ -22,8 +22,10 @@ class UniformBuffer {
                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                          uniform_buffers_[i], uniform_buffers_memory_[i], device_, physical_device);
 
-            vkMapMemory(device_, uniform_buffers_memory_[i], 0, buffer_size, 0,
-                        &uniform_buffers_mapped_[i]);
+            if (vkMapMemory(device_, uniform_buffers_memory_[i], 0, buffer_size, 0,
+                            &uniform_buffers_mapped_[i]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to map uniform buffer memory!");
+            }
         }
     }
 
@@ -38,6 +40,7 @@ class UniformBuffer {
     VkBuffer GetVkUniformBuffer(const size_t idx) const { return uniform_buffers_[idx]; }
 
     void UpdateUniformBuffer(const UniformBufferObject& params, const uint32_t cur_frame) {
+        spdlog::debug("sizeof(UniformBufferObject): {}", sizeof(UniformBufferObject));
         memcpy(uniform_buffers_mapped_[cur_frame], &params, sizeof(UniformBufferObject));
     }
 

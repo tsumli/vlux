@@ -1,5 +1,7 @@
 #ifndef TEXTURE_H
 #define TEXTURE_H
+#include <vulkan/vulkan_core.h>
+
 #include "pch.h"
 //
 #include "common/buffer.h"
@@ -15,7 +17,7 @@ class Texture {
         : device_(device) {
         VkBuffer staging_buffer;
         VkDeviceMemory staging_buffer_memory;
-        const auto format = VK_FORMAT_R8G8B8A8_SRGB;
+        const auto format = VK_FORMAT_R8G8B8A8_UNORM;
         CreateBuffer(image.GetSize(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                      staging_buffer, staging_buffer_memory, device, physical_device);
