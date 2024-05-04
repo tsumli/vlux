@@ -204,7 +204,6 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
     auto base_color_texture = [&]() -> std::shared_ptr<Texture> {
         const auto idx = material.pbrMetallicRoughness.baseColorTexture.index;
         if (idx == -1) {
-            spdlog::debug("base color texture not found");
             return nullptr;
         }
         const auto image = create_image(get_image_idx(idx));
@@ -214,7 +213,6 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
     auto normal_texture = [&]() -> std::shared_ptr<Texture> {
         const auto idx = material.normalTexture.index;
         if (idx == -1) {
-            spdlog::debug("normal texture not found");
             return nullptr;
         }
         auto image = create_image(get_image_idx(idx));
@@ -224,7 +222,6 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
     auto occlusion_texture = [&]() -> std::shared_ptr<Texture> {
         const auto idx = material.occlusionTexture.index;
         if (idx == -1) {
-            spdlog::debug("occlusion texture not found");
             return nullptr;
         }
         auto image = create_image(get_image_idx(idx));
@@ -234,7 +231,15 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
     auto emmisive_texture = [&]() -> std::shared_ptr<Texture> {
         const auto idx = material.emissiveTexture.index;
         if (idx == -1) {
-            spdlog::debug("emmisive texture not found");
+            return nullptr;
+        }
+        auto image = create_image(get_image_idx(idx));
+        return create_texture(image);
+    }();
+
+    auto metallic_roughness_texture = [&]() -> std::shared_ptr<Texture> {
+        const auto idx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+        if (idx == -1) {
             return nullptr;
         }
         auto image = create_image(get_image_idx(idx));
@@ -251,6 +256,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         .normal_texture = normal_texture,
         .occlusion_texture = occlusion_texture,
         .emissive_texture = emmisive_texture,
+        .metallic_roughness_texture = metallic_roughness_texture,
     };
 }
 

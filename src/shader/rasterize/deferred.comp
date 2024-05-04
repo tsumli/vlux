@@ -35,8 +35,9 @@ layout(rgba32f, set = 1, binding = 2) uniform readonly image2D position;
 layout(rgba32f, set = 1, binding = 3) uniform readonly image2D emissive;
 layout(rgba32f, set = 1, binding = 4) uniform readonly image2D base_color_factor;
 layout(rgba32f, set = 1, binding = 5) uniform readonly image2D metallic_roughness_factor;
-layout(r32f, set = 1, binding = 6) uniform image2D depth;
-layout(rgba32f, set = 1, binding = 7) uniform writeonly image2D result;
+layout(rgba32f, set = 1, binding = 6) uniform readonly image2D metallic_roughness;
+layout(r32f, set = 1, binding = 7) uniform image2D depth;
+layout(rgba32f, set = 1, binding = 8) uniform writeonly image2D result;
 
 layout(set = 2, binding = 0) uniform ubo_light { LightParams light; };
 
@@ -53,20 +54,39 @@ vec4 ReconstructWorldPositionFromDepth(in vec2 coords, in float depth, in float 
     return raw_world_pos / raw_world_pos.w;
 }
 
-vec4 CalcLighting(in const vec3 position, in const vec3 normal, in const float specular_power) {
-    vec3 light_dir = light.pos.xyz - position;
-    const float dist = length(light_dir);
-    light_dir /= dist;
-    const float attenuation = max(0, 1.0f - (dist / light.range));
+const float PI = 3.14159265359f;
+vec3 LambertianDiffuse(in vec3 pixel_color) { return pixel_color / PI; }
 
-    float n_dot_l = clamp(dot(normalize(normal), light_dir), 0.0, 1.0);
-    vec3 diffuse = n_dot_l * light.color.xyz * attenuation;
+vec3 CookTorranceBRDF(in const vec3 N, in const vec3 V, in const vec3 L, in const vec3 albedo,
+                      in const float roughness, in const float metalness) {
+    vec3 H = normalize(V + L);
+    float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotH = max(dot(N, H), 0.0);
+    float VdotH = max(dot(V, H), 0.0);
 
-    const vec3 view_dir = normalize(camera.pos.xyz - position);
-    const vec3 half_dir = normalize(light_dir + view_dir);
-    const float specular =
-        pow(clamp(dot(normal, half_dir), 0.0, 1.0), specular_power) * attenuation * n_dot_l;
-    return vec4(diffuse, specular);
+    // Fresnel term (Schlick approximation)
+    float F0 = 0.04;
+    float F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
+
+    // Distribution term (GGX/Trowbridge-Reitz)
+    float alpha = roughness * roughness;
+    float alpha2 = alpha * alpha;
+    float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
+    float D = alpha2 / (PI * denom * denom);
+
+    // Geometric term (Smith's method)
+    float k = alpha / 2.0;
+    float G = NdotL / (NdotL * (1.0 - k) + k);
+    G *= NdotV / (NdotV * (1.0 - k) + k);
+
+    // Specular term
+    vec3 Fc = vec3(F);
+    vec3 Fs = D * Fc * G / (4.0 * NdotL * NdotV);
+
+    // Combine specular and diffuse
+    vec3 diffuse = (1.0 - Fc) * albedo / PI;
+    return NdotL * (diffuse + Fs);
 }
 
 void main() {
@@ -77,25 +97,41 @@ void main() {
     }
 
     const float pixel_depth = imageLoad(depth, ivec2(gl_GlobalInvocationID.xy)).x;
-    const vec4 position = imageLoad(position, ivec2(gl_GlobalInvocationID.xy));
+    const vec4 pixel_pos = imageLoad(position, ivec2(gl_GlobalInvocationID.xy));
+
+    const vec4 pixel_metallic_roughness_factor =
+        imageLoad(metallic_roughness_factor, ivec2(gl_GlobalInvocationID.xy));
+    const float pixel_metallic_factor = pixel_metallic_roughness_factor.x;
+    const float pixel_roughness_factor = pixel_metallic_roughness_factor.y;
+
+    const vec4 pixel_metallic_roughness =
+        imageLoad(metallic_roughness, ivec2(gl_GlobalInvocationID.xy));
+    const float pixel_metallic = pixel_metallic_roughness.x * pixel_metallic_factor;
+    const float pixel_roughness = pixel_metallic_roughness.y * pixel_roughness_factor;
 
     const vec4 pixel_base_color_factor =
         imageLoad(base_color_factor, ivec2(gl_GlobalInvocationID.xy));
-    const vec4 pixel_metallic_roughness_factor =
-        imageLoad(metallic_roughness_factor, ivec2(gl_GlobalInvocationID.xy));
     const vec4 pixel_color =
         imageLoad(color, ivec2(gl_GlobalInvocationID.xy)) * pixel_base_color_factor;
+
     const vec4 pixel_normal = imageLoad(normal, ivec2(gl_GlobalInvocationID.xy));
     const vec4 pixel_emissive = imageLoad(emissive, ivec2(gl_GlobalInvocationID.xy));
 
-    const vec4 lighting = CalcLighting(position.xyz, pixel_normal.xyz, 2.0f);
+    // Lighting Calculation
+    const float distance = length(light.pos.xyz - pixel_pos.xyz);
+    const float attenuation =
+        1.0 / (1.0 + 0.07 * distance + 0.017 * distance * distance) * light.range;
 
-    const vec3 pixel_specular = {1, 1, 1};
-    const vec3 diffuse = lighting.xyz * pixel_color.xyz;
-    const vec3 specular = lighting.w * pixel_specular.xyz;
+    const vec3 cook_torrance_brdf =
+        CookTorranceBRDF(pixel_normal.xyz, normalize(camera.pos.xyz - pixel_pos.xyz),
+                         normalize(light.pos.xyz - pixel_pos.xyz), pixel_color.xyz, pixel_roughness,
+                         pixel_metallic) *
+        light.color.xyz * attenuation;
 
-    vec3 final_color = diffuse + specular + pixel_emissive.xyz;
-    final_color = pow(final_color, vec3(0.45));  // gamma correction
+    vec3 final_color = clamp(cook_torrance_brdf, 0.0, 1.0) + pixel_emissive.xyz;
+
+    // gamma correction
+    final_color = pow(final_color, vec3(0.45));
 
     switch (mode.mode) {
         case 0:
@@ -108,28 +144,26 @@ void main() {
             imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(pixel_normal.xyz, 1.0f));
             break;
         case 3:
-            imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(position.xyz, 1.0f));
+            imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(pixel_pos.xyz, 1.0f));
             break;
         case 4:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy),
                        vec4(pixel_depth, 0.0f, 0.0f, 1.0f));
             break;
         case 5:
-            imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(lighting.xyz, 1.0f));
-            break;
-        case 6:
-            imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(lighting.w, 0.0f, 0.0f, 1.0f));
-            break;
-        case 7:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(pixel_emissive.xyz, 1.0f));
             break;
-        case 8:
+        case 6:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy),
                        vec4(pixel_base_color_factor.xyz, 1.0f));
             break;
-        case 9:
+        case 7:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy),
                        vec4(pixel_metallic_roughness_factor.xyz, 1.0f));
+            break;
+        case 8:
+            imageStore(result, ivec2(gl_GlobalInvocationID.xy),
+                       vec4(pixel_metallic_roughness.xyz, 1.0f));
             break;
         default:
             break;

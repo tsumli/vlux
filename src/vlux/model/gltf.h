@@ -20,6 +20,7 @@ struct GltfObject {
     std::shared_ptr<Texture> normal_texture;
     std::shared_ptr<Texture> occlusion_texture;
     std::shared_ptr<Texture> emissive_texture;
+    std::shared_ptr<Texture> metallic_roughness_texture;
 };
 
 GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
