@@ -127,7 +127,9 @@ void App::CreateScene() {
             }
         }
     }
-    scene_.emplace(std::move(models));
+    const auto cubemap_path = scene_config.at("cubemap").get<std::filesystem::path>();
+    auto cubemap = CubeMap(cubemap_path);
+    scene_.emplace(std::move(models), std::move(cubemap));
 }
 
 void App::MainLoop() {
