@@ -55,10 +55,12 @@ App::App(DeviceResource& device_resource)
     }
 
     // setup draw
+    spdlog::debug("setup draw");
     draw_ = std::make_unique<draw::rasterize::DrawRasterize>(
         transform_ubo_, camera_ubo_, light_ubo_, scene_.value(), device_resource_);
 
     // Setup GUI
+    spdlog::debug("setup gui");
     const auto queue_family = FindQueueFamilies(device_resource_.GetVkPhysicalDevice(),
                                                 device_resource_.GetSurface().GetVkSurface());
     const auto gui_input = GuiInput{
@@ -107,7 +109,8 @@ void App::CreateScene() {
                                            std::move(gltf_objects.indices));
                 auto model = Model(std::move(vertex_buffers), std::move(index_buffers),
                                    std::move(gltf_objects.base_color_texture),
-                                   std::move(gltf_objects.normal_texture));
+                                   std::move(gltf_objects.normal_texture),
+                                   std::move(gltf_objects.emissive_texture));
                 models.emplace_back(std::move(model));
             }
         }

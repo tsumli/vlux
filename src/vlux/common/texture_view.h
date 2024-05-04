@@ -6,6 +6,7 @@ namespace vlux {
 struct TextureView {
     VkImageView color;
     VkImageView normal;
+    VkImageView emissive;
 };
 }  // namespace vlux
 

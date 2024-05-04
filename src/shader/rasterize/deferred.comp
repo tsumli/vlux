@@ -32,8 +32,9 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba32f, set = 1, binding = 0) uniform readonly image2D color;
 layout(rgba32f, set = 1, binding = 1) uniform readonly image2D normal;
 layout(rgba32f, set = 1, binding = 2) uniform readonly image2D position;
-layout(r32f, set = 1, binding = 3) uniform image2D depth;
-layout(rgba32f, set = 1, binding = 4) uniform writeonly image2D result;
+layout(rgba32f, set = 1, binding = 3) uniform readonly image2D emissive;
+layout(r32f, set = 1, binding = 4) uniform image2D depth;
+layout(rgba32f, set = 1, binding = 5) uniform writeonly image2D result;
 
 layout(set = 2, binding = 0) uniform ubo_light { LightParams light; };
 
@@ -73,12 +74,12 @@ void main() {
         return;
     }
 
-    // Restore position from depth
     const float pixel_depth = imageLoad(depth, ivec2(gl_GlobalInvocationID.xy)).x;
     const vec4 position = imageLoad(position, ivec2(gl_GlobalInvocationID.xy));
 
     const vec4 pixel_color = imageLoad(color, ivec2(gl_GlobalInvocationID.xy));
     const vec4 pixel_normal = imageLoad(normal, ivec2(gl_GlobalInvocationID.xy));
+    const vec4 pixel_emissive = imageLoad(emissive, ivec2(gl_GlobalInvocationID.xy));
 
     const vec4 lighting = CalcLighting(position.xyz, pixel_normal.xyz, 2.0f);
 
@@ -86,7 +87,7 @@ void main() {
     const vec3 diffuse = lighting.xyz * pixel_color.xyz;
     const vec3 specular = lighting.w * pixel_specular.xyz;
 
-    vec3 final_color = diffuse + specular;
+    vec3 final_color = diffuse + specular + pixel_emissive.xyz;
     final_color = pow(final_color, vec3(0.45));  // gamma correction
 
     switch (mode.mode) {
@@ -111,6 +112,9 @@ void main() {
             break;
         case 6:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(lighting.w, 0.0f, 0.0f, 1.0f));
+            break;
+        case 7:
+            imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(pixel_emissive.xyz, 1.0f));
             break;
         default:
             break;

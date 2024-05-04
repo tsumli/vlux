@@ -4,9 +4,8 @@
 
 namespace vlux {
 namespace {
-constexpr auto kDeviceExtensions = std::to_array<const char*>({
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-});
+constexpr auto kDeviceExtensions = std::to_array<const char*>(
+    {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_ROBUSTNESS_2_EXTENSION_NAME});
 }
 
 bool CheckDeviceExtensionSupport(VkPhysicalDevice physical_device) {
@@ -64,20 +63,32 @@ Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surfac
         return queue_create_infos;
     }();
 
-    constexpr auto kDeviceFeatures = VkPhysicalDeviceFeatures{
-        .independentBlend = VK_TRUE,
-        .samplerAnisotropy = VK_TRUE,
+    auto robustness_2_features = VkPhysicalDeviceRobustness2FeaturesEXT{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+        .robustBufferAccess2 = VK_TRUE,
+        .robustImageAccess2 = VK_TRUE,
+        .nullDescriptor = VK_TRUE,
+    };
+
+    const auto device_features = VkPhysicalDeviceFeatures2{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &robustness_2_features,
+        .features =
+            VkPhysicalDeviceFeatures{
+                .independentBlend = VK_TRUE,
+                .samplerAnisotropy = VK_TRUE,
+            },
     };
 
     const auto create_info = VkDeviceCreateInfo{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &device_features,
         .queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size()),
         .pQueueCreateInfos = queue_create_infos.data(),
         .enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size()),
         .ppEnabledLayerNames = kValidationLayers.data(),
         .enabledExtensionCount = static_cast<uint32_t>(kDeviceExtensions.size()),
         .ppEnabledExtensionNames = kDeviceExtensions.data(),
-        .pEnabledFeatures = &kDeviceFeatures,
     };
 
     if (vkCreateDevice(physical_device, &create_info, nullptr, &device_) != VK_SUCCESS) {
