@@ -50,7 +50,6 @@ or you can just use VSCode to launch.
 - [ ] Screen space ambient occlusion
 - [ ] Transparent pass
 - [ ] Reflection
-- [ ] Reflection
 - [ ] Shadow
 - [ ] LOD
 - [ ] Displacement mapping
