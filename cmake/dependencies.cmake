@@ -77,6 +77,20 @@ set(FMT_INCLUDE ${BUILD_LIB_DIR}/fmt/include)
 target_include_directories(${LIB_NAME} PUBLIC ${SPDLOG_INCLUDE})
 target_link_libraries(${LIB_NAME} PUBLIC fmt)
 
+# json
+message(STATUS "Setup json")
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+  SOURCE_DIR ${BUILD_LIB_DIR}/json
+)
+FetchContent_MakeAvailable(json)
+set(JSON_INCLUDE ${BUILD_LIB_DIR}/json/include)
+target_include_directories(${LIB_NAME} PUBLIC ${JSON_INCLUDE})
+target_link_libraries(${LIB_NAME} PUBLIC nlohmann_json::nlohmann_json)
+
+
 # download asset
 set(ASSET_DIR ${CMAKE_CURRENT_BINARY_DIR}/assets)
 message(STATUS "Assets: gltf-samples")

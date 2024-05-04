@@ -40,6 +40,9 @@
 // fmt
 #include "fmt/core.h"
 
+// json
+#include "nlohmann/json.hpp"
+
 // tinygltf
 #include <stb_image.h>
 #include <tiny_gltf.h>

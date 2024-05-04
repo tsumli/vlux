@@ -1,6 +1,6 @@
 #include "app.h"
 
-#include <glm/gtc/type_ptr.hpp>
+#include <exception>
 
 #include "camera.h"
 #include "common/command_buffer.h"
@@ -14,6 +14,8 @@
 #include "model/gltf.h"
 #include "model/model.h"
 #include "uniform_buffer.h"
+#include "utils/io.h"
+#include "utils/path.h"
 
 namespace vlux {
 App::App(DeviceResource& device_resource)
@@ -23,12 +25,10 @@ App::App(DeviceResource& device_resource)
       camera_ubo_(device_resource_.GetDevice().GetVkDevice(),
                   device_resource_.GetVkPhysicalDevice()),
       light_ubo_(device_resource_.GetDevice().GetVkDevice(),
-                 device_resource_.GetVkPhysicalDevice()) {
+                 device_resource_.GetVkPhysicalDevice()),
+      config_(ReadJsonFile(GetCurrentDir() / "config.json")) {
     const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto physical_device = device_resource_.GetVkPhysicalDevice();
-
-    // setup logger lovel
-    spdlog::set_level(spdlog::level::debug);
 
     // Resource Creation
     command_pool_.emplace(device, physical_device, device_resource_.GetSurface().GetVkSurface());
@@ -43,11 +43,16 @@ App::App(DeviceResource& device_resource)
     camera_.emplace(glm::vec3{80.0f, 20.0f, -12.0f}, glm::vec3{0.0f, 0.0f, 0.0f}, width, height);
 
     // setup obejets
-    lights_.emplace_back(LightParams{
-        .pos = glm::vec4(80.0f, 40.0f, -12.0f, 0.0f),
-        .range = 100.0f,
-        .color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
-    });
+    for (const auto& config_light : config_.at("lights")) {
+        const auto pos = config_light.at("pos").get<std::array<float, 3>>();
+        const auto range = config_light.at("range").get<float>();
+        const auto color = config_light.at("color").get<std::array<float, 4>>();
+        lights_.emplace_back(LightParams{
+            .pos = glm::vec4(pos[0], pos[1], pos[2], 0.0f),
+            .range = range,
+            .color = glm::vec4(color[0], color[1], color[2], color[3]),
+        });
+    }
 
     // setup draw
     draw_ = std::make_unique<draw::rasterize::DrawRasterize>(
@@ -80,45 +85,20 @@ void App::CreateScene() {
     const auto graphics_queue = device_resource_.GetGraphicsQueue();
 
     auto models = std::vector<Model>();
+    for (const auto& model_config : config_.at("models")) {
+        // unpack config
+        const auto name = model_config.at("name").get<std::string>();
+        const auto path = model_config.at("path").get<std::filesystem::path>();
+        const auto scale = model_config.at("scale").get<float>();
+        const auto translation = model_config.at("translation").get<std::array<float, 3>>();
 
-    // create cube
-    // [&]() {
-    // const auto size = 5.0f;
-    // auto vertices = std::vector<Vertex>{
-    //     {{-size, -size, size}, {1.0f, 0.0f, 0.0f}},   // 0
-    //     {{size, -size, size}, {0.0f, 1.0f, 0.0f}},    // 1
-    //     {{size, size, size}, {0.0f, 0.0f, 1.0f}},     // 2
-    //     {{-size, size, size}, {1.0f, 1.0f, 1.0f}},    // 3
-    //     {{-size, -size, -size}, {1.0f, 0.0f, 1.0f}},  // 4
-    //     {{size, -size, -size}, {1.0f, 1.0f, 0.0f}},   // 5
-    //     {{size, size, -size}, {0.0f, 1.0f, 1.0f}},    // 6
-    //     {{-size, size, -size}, {0.5f, 0.5f, 0.5f}}    // 7
-    // };
-    // auto indices = std::vector<uint16_t>{0, 1, 2, 2, 3, 0, 5, 4, 7, 7, 6, 5, 3, 2, 6, 6, 7, 3,
-    //                                      4, 5, 1, 1, 0, 4, 1, 5, 6, 6, 2, 1, 4, 0, 3, 3, 7, 4};
-    // auto vertex_buffers = std::vector<VertexBuffer>();
-    // vertex_buffers.emplace_back(
-    //     device_resource_.GetDevice().GetVkDevice(), device_resource_.GetVkPhysicalDevice(),
-    //     device_resource_.GetGraphicsQueue(),
-    //     device_resource_.GetCommandPool().GetVkCommandPool(), std::move(vertices));
-    // auto index_buffers = std::vector<IndexBuffer>();
-    // index_buffers.emplace_back(
-    //     device_resource_.GetDevice().GetVkDevice(), device_resource_.GetVkPhysicalDevice(),
-    //     device_resource_.GetGraphicsQueue(),
-    //     device_resource_.GetCommandPool().GetVkCommandPool(), std::move(indices));
-    // auto model = Model(std::move(vertex_buffers), std::move(index_buffers));
-    // models.emplace_back(std::move(model));
-    // }();
-
-    // create sponza
-    [&]() {
-        spdlog::debug("load sponza");
-        const auto gltf_model =
-            LoadTinyGltfModel("assets/gltf-samples/2.0/Sponza/glTF/Sponza.gltf");
+        spdlog::debug("load {}", name);
+        const auto gltf_model = LoadTinyGltfModel(path);
         for (const auto& mesh : gltf_model.meshes) {
             for (const auto& primitive : mesh.primitives) {
-                auto gltf_objects = LoadGltfObjects(primitive, gltf_model, graphics_queue,
-                                                    command_pool, physical_device, device, 0.1f);
+                auto gltf_objects = LoadGltfObjects(
+                    primitive, gltf_model, graphics_queue, command_pool, physical_device, device,
+                    scale, glm::vec3(translation[0], translation[1], translation[2]));
                 auto vertex_buffers = std::vector<VertexBuffer>();
                 vertex_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
                                             std::move(gltf_objects.vertices));
@@ -131,7 +111,7 @@ void App::CreateScene() {
                 models.emplace_back(std::move(model));
             }
         }
-    }();
+    }
     scene_.emplace(std::move(models));
 }
 
@@ -382,6 +362,9 @@ void App::DrawFrame() {
         ImGui::Begin("Render");
         auto mode = static_cast<int>(draw_->GetMode());
         ImGui::InputInt("Mode", &mode);
+        if (mode < 0) {
+            mode = 0;
+        }
         draw_->SetMode(static_cast<uint32_t>(mode));
         ImGui::End();
 

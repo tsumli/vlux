@@ -20,6 +20,20 @@ inline std::vector<char> read_file(const std::filesystem::path& filename) {
 
     return buffer;
 }
+
+inline nlohmann::json ReadJsonFile(const std::filesystem::path& filename) {
+    if (!std::filesystem::exists(filename)) {
+        throw std::runtime_error(fmt::format("file: {} does not exist", filename.string()));
+    }
+    auto file = std::ifstream(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("failed to open file!");
+    }
+    const auto j = nlohmann::json::parse(file, nullptr, true, true);
+    file.close();
+    return j;
+}
+
 }  // namespace vlux
 
 #endif

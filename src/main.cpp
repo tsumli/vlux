@@ -1,8 +1,27 @@
+#include "pch.h"
+//
+#include "utils/io.h"
+#include "utils/path.h"
 #include "vlux/app.h"
 #include "vlux/device_resource/device_resource.h"
 
 int main() {
-    auto window = vlux::Window(1920, 1080, "vlux");
+    const auto config_path = vlux::GetCurrentDir() / "config.json";
+    const auto config = vlux::ReadJsonFile(config_path);
+
+    // unpack config
+    const auto spdlog_level = config.at("spdlog_level").get<std::string>();
+    const auto width = config.at("width").get<uint32_t>();
+    const auto height = config.at("height").get<uint32_t>();
+
+    // setup logger lovel
+    if (spdlog_level == "info") {
+        spdlog::set_level(spdlog::level::info);
+    } else if (spdlog_level == "debug") {
+        spdlog::set_level(spdlog::level::debug);
+    }
+
+    auto window = vlux::Window(width, height, "vlux");
     auto device_resource = vlux::DeviceResource(window);
     auto app = vlux::App(device_resource);
     try {
