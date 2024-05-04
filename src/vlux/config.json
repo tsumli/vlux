@@ -45,6 +45,16 @@
                 5.0,
                 0.0
             ]
+        },
+        {
+            "name": "Lantern",
+            "path": "assets/gltf-samples/2.0/Lantern/glTF/Lantern.gltf",
+            "scale": 0.8,
+            "translation": [
+                60.0,
+                10.0,
+                10.0
+            ]
         }
     ]
 }

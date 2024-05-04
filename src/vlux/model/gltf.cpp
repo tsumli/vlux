@@ -7,7 +7,9 @@ namespace vlux {
 namespace {
 
 bool ComputeTangentFrame(std::vector<Vertex>& vertices, const std::vector<Index>& indices) {
-    assert(vertices.size() % 3 == 0);
+    if (vertices.size() % 3 != 0) {
+        return false;
+    }
     for (size_t i = 0; i < vertices.size(); i += 3) {
         auto& v0 = vertices[indices[i]];
         auto& v1 = vertices[indices[i + 1]];
@@ -167,17 +169,21 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
 
             auto tangents = std::vector<glm::vec4>(vertices_size);
             if (!ComputeTangentFrame(vertices, indices)) {
-                throw std::runtime_error("failed to compute tangent");
+                spdlog::warn("failed to compute tangent frame");
             }
         }
     }();
 
     // Loading material
     const auto material = model.materials[primitive.material];
-    [[maybe_unused]] const auto base_color_factor =
-        glm::vec3(static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[0]),
-                  static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[1]),
-                  static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[2]));
+
+    // material
+    const auto base_color_factor = glm::vec4(material.pbrMetallicRoughness.baseColorFactor[0],
+                                             material.pbrMetallicRoughness.baseColorFactor[1],
+                                             material.pbrMetallicRoughness.baseColorFactor[2],
+                                             material.pbrMetallicRoughness.baseColorFactor[3]);
+    const auto metallic_factor = static_cast<float>(material.pbrMetallicRoughness.metallicFactor);
+    const auto roughness_factor = static_cast<float>(material.pbrMetallicRoughness.roughnessFactor);
 
     // texture
     const auto get_image_idx = [&](const auto texture_idx) {
@@ -238,6 +244,9 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
     return {
         .indices = indices,
         .vertices = vertices,
+        .base_color_factor = base_color_factor,
+        .metallic_factor = metallic_factor,
+        .roughness_factor = roughness_factor,
         .base_color_texture = base_color_texture,
         .normal_texture = normal_texture,
         .occlusion_texture = occlusion_texture,

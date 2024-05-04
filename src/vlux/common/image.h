@@ -3,6 +3,8 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <limits>
+
 #include "pch.h"
 
 namespace vlux {
@@ -51,7 +53,6 @@ class Image {
     int height_;
     int channels_;
 };
-
 }  // namespace vlux
 
 #endif

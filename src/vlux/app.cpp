@@ -107,10 +107,12 @@ void App::CreateScene() {
                 auto index_buffers = std::vector<IndexBuffer>();
                 index_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
                                            std::move(gltf_objects.indices));
-                auto model = Model(std::move(vertex_buffers), std::move(index_buffers),
-                                   std::move(gltf_objects.base_color_texture),
-                                   std::move(gltf_objects.normal_texture),
-                                   std::move(gltf_objects.emissive_texture));
+                auto model = Model(
+                    device, physical_device, std::move(vertex_buffers), std::move(index_buffers),
+                    std::move(gltf_objects.base_color_factor), gltf_objects.metallic_factor,
+                    gltf_objects.roughness_factor, std::move(gltf_objects.base_color_texture),
+                    std::move(gltf_objects.normal_texture),
+                    std::move(gltf_objects.emissive_texture));
                 models.emplace_back(std::move(model));
             }
         }
@@ -373,7 +375,7 @@ void App::DrawFrame() {
 
         ImGui::Begin("Light");
         ImGui::SliderFloat3("pos", glm::value_ptr(lights_.at(0).pos), -100.0f, 100.0f);
-        ImGui::InputFloat("range", &lights_.at(0).range);
+        ImGui::SliderFloat("range", &lights_.at(0).range, 0.0f, 1000.0f);
         ImGui::ColorPicker4("color", glm::value_ptr(lights_.at(0).color));
         ImGui::End();
 

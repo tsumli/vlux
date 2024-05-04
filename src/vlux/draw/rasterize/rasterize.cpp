@@ -2,14 +2,7 @@
 
 #include <vulkan/vulkan_core.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <memory>
-#include <utility>
-
 #include "common/descriptor_set_layout.h"
-#include "common/texture_view.h"
 #include "device_resource/device_resource.h"
 #include "pch.h"
 #include "scene/scene.h"
@@ -21,8 +14,9 @@
 
 namespace vlux::draw::rasterize {
 namespace {
+constexpr auto kNumDescriptorSetGraphics = 2;
 constexpr auto kNumDescriptorSetCompute = 3;
-}
+}  // namespace
 
 DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo,
                              const UniformBuffer<CameraParams>& camera_ubo,
@@ -33,6 +27,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     const auto physical_device = device_resource.GetVkPhysicalDevice();
     const auto [width, height] = device_resource.GetWindow().GetWindowSize();
 
+    spdlog::debug("setup render targets");
     // Color
     [&]() {
         render_targets_[RenderTargetType::kColor].emplace(device);
@@ -108,6 +103,40 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         emissive.SetImageView(image_view);
     }();
 
+    // BaseColorFactor
+    [&]() {
+        render_targets_[RenderTargetType::kBaseColorFactor].emplace(device);
+        auto& base_color_factor = render_targets_.at(RenderTargetType::kBaseColorFactor).value();
+        base_color_factor.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, base_color_factor.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, base_color_factor.GetVkImageRef(),
+                    base_color_factor.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view =
+            CreateImageView(base_color_factor.GetVkImageRef(), base_color_factor.GetVkFormat(), 0,
+                            VK_IMAGE_ASPECT_COLOR_BIT, device);
+        base_color_factor.SetImageView(image_view);
+    }();
+
+    // MetallicRoughnessFactor
+    [&]() {
+        render_targets_[RenderTargetType::kMetallicRoughtnessFactor].emplace(device);
+        auto& metallic_roughtness_factor =
+            render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor).value();
+        metallic_roughtness_factor.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, metallic_roughtness_factor.GetVkFormat(),
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, metallic_roughtness_factor.GetVkImageRef(),
+                    metallic_roughtness_factor.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(metallic_roughtness_factor.GetVkImageRef(),
+                                                metallic_roughtness_factor.GetVkFormat(), 0,
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        metallic_roughtness_factor.SetImageView(image_view);
+    }();
+
     // Finalized
     [&]() {
         render_targets_[RenderTargetType::kFinalized].emplace(device);
@@ -124,6 +153,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // texture sampler
+    spdlog::debug("setup texture samplers");
     [&]() {
         for (auto type_i = 0; type_i < std::to_underlying(TextureSamplerType::kCount); type_i++) {
             texture_samplers_[static_cast<TextureSamplerType>(type_i)].emplace(physical_device,
@@ -132,59 +162,82 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // DescriptorSetLayout
+    spdlog::debug("setup graphics descriptor set layout");
     [&]() {
-        constexpr auto kLayoutBindings = std::to_array({
-            // transform
-            VkDescriptorSetLayoutBinding{
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-            // color
-            VkDescriptorSetLayoutBinding{
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-            // normal
-            VkDescriptorSetLayoutBinding{
-                .binding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-            // emissive
-            VkDescriptorSetLayoutBinding{
-                .binding = 3,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = nullptr,
-            },
-        });
+        graphics_descriptor_set_layout_.reserve(kNumDescriptorSetGraphics);
+        {
+            constexpr auto kLayoutBindings = std::to_array({
+                // transform
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // color
+                VkDescriptorSetLayoutBinding{
+                    .binding = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // normal
+                VkDescriptorSetLayoutBinding{
+                    .binding = 2,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // emissive
+                VkDescriptorSetLayoutBinding{
+                    .binding = 3,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+            });
 
-        const auto layout_info = VkDescriptorSetLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
-            .pBindings = kLayoutBindings.data(),
-        };
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+            graphics_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
+        {
+            constexpr auto kLayoutBindings = std::to_array({
+                // material
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+            });
 
-        graphics_descriptor_set_layout_.emplace(device, layout_info);
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+            graphics_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
     }();
 
     // DescriptorPool
+    spdlog::debug("setup graphics descriptor pool");
     [&]() {
         const auto num_model = static_cast<uint32_t>(scene.GetModels().size());
         const auto pool_sizes = std::to_array({
-            // transform
+            // transform + material
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 2,
             },
             // color + normal + emissive
             VkDescriptorPoolSize{
@@ -194,7 +247,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         });
         const auto pool_info = VkDescriptorPoolCreateInfo{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = kMaxFramesInFlight * num_model,
+            .maxSets = kMaxFramesInFlight * num_model * kNumDescriptorSetGraphics,
             .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
             .pPoolSizes = pool_sizes.data(),
         };
@@ -202,6 +255,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // RenderPass
+    spdlog::debug("setup render pass");
     [&]() {
         const auto attachment_descs = std::to_array({
             // Color
@@ -248,6 +302,29 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             },
+            // BaseColorFactor
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kBaseColorFactor)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
+            // MetallicRoughnessFactor
+            VkAttachmentDescription{
+                .format =
+                    render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
             // Depth
             VkAttachmentDescription{
                 .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
@@ -283,9 +360,19 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .attachment = 3,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            // base color factor
+            {
+                .attachment = 4,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
+            // metallic roughness factor
+            {
+                .attachment = 5,
+                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
         });
         constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
-            .attachment = 4,
+            .attachment = 6,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
         subpass.emplace_back(VkSubpassDescription{
@@ -322,17 +409,26 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // PipelineLayout (Graphics)
+    spdlog::debug("setup graphics pipeline layout");
     [&]() {
-        const auto set_layout = graphics_descriptor_set_layout_->GetVkDescriptorSetLayout();
-        const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts = &set_layout,
-        };
-        graphics_pipeline_layout_.emplace(device, pipeline_layout_info);
+        graphics_pipeline_layout_.reserve(kMaxFramesInFlight);
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            auto set_layout = std::vector<VkDescriptorSetLayout>();
+            set_layout.reserve(graphics_descriptor_set_layout_.size());
+            for (const auto& layout : graphics_descriptor_set_layout_) {
+                set_layout.emplace_back(layout.GetVkDescriptorSetLayout());
+            }
+            const auto pipeline_layout_info = VkPipelineLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .setLayoutCount = static_cast<uint32_t>(set_layout.size()),
+                .pSetLayouts = set_layout.data(),
+            };
+            graphics_pipeline_layout_.emplace_back(device, pipeline_layout_info);
+        }
     }();
 
     // GraphicsPipeline
+    spdlog::debug("setup graphics pipeline");
     [&]() {
         const auto vert_path = std::filesystem::path("rasterize/shader.vert.spv");
         const auto frag_path = std::filesystem::path("rasterize/shader.frag.spv");
@@ -440,6 +536,30 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
             },
+            // BaseColorFactor
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_FALSE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
+            // MetallicRoughnessFactor
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_FALSE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
         });
 
         const auto color_blending = [&]() {
@@ -467,46 +587,58 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             .pDynamicStates = kDynamicStates.data(),
         };
 
-        const auto pipeline_info = VkGraphicsPipelineCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-            .stageCount = static_cast<uint32_t>(shader_stages.size()),
-            .pStages = shader_stages.data(),
-            .pVertexInputState = &vertex_input_info,
-            .pInputAssemblyState = &kInputAssembly,
-            .pViewportState = &kViewportState,
-            .pRasterizationState = &kRasterizer,
-            .pMultisampleState = &kMultisampling,
-            .pDepthStencilState = &kDepthStencil,
-            .pColorBlendState = &color_blending,
-            .pDynamicState = &kDynamicState,
-            .layout = graphics_pipeline_layout_->GetVkPipelineLayout(),
-            .renderPass = render_pass_->GetVkRenderPass(),
-            .subpass = 0,
-            .basePipelineHandle = VK_NULL_HANDLE,
-        };
-        graphics_pipeline_.emplace(device, pipeline_info);
+        graphics_pipeline_.reserve(kMaxFramesInFlight);
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            const auto pipeline_info = VkGraphicsPipelineCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                .stageCount = static_cast<uint32_t>(shader_stages.size()),
+                .pStages = shader_stages.data(),
+                .pVertexInputState = &vertex_input_info,
+                .pInputAssemblyState = &kInputAssembly,
+                .pViewportState = &kViewportState,
+                .pRasterizationState = &kRasterizer,
+                .pMultisampleState = &kMultisampling,
+                .pDepthStencilState = &kDepthStencil,
+                .pColorBlendState = &color_blending,
+                .pDynamicState = &kDynamicState,
+                .layout = graphics_pipeline_layout_.at(frame_i).GetVkPipelineLayout(),
+                .renderPass = render_pass_->GetVkRenderPass(),
+                .subpass = 0,
+                .basePipelineHandle = VK_NULL_HANDLE,
+            };
+            graphics_pipeline_.emplace_back(device, pipeline_info);
+        }
     }();
 
-    // DescriptorSets
+    // Graphics DescriptorSets
+    spdlog::debug("setup graphics descriptor sets");
     [&]() {
         // allocate descriptor sets
         graphics_descriptor_sets_.reserve(kMaxFramesInFlight);
+        const auto model_size = scene.GetModels().size();
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            const auto descriptor_set_layout = std::vector<VkDescriptorSetLayout>(
-                scene.GetModels().size(),
-                graphics_descriptor_set_layout_->GetVkDescriptorSetLayout());
+            auto set_layout = std::vector<VkDescriptorSetLayout>();
+            set_layout.reserve(model_size * graphics_descriptor_set_layout_.size());
+            for (size_t model_i = 0; model_i < model_size; model_i++) {
+                for (const auto& layout : graphics_descriptor_set_layout_) {
+                    set_layout.emplace_back(layout.GetVkDescriptorSetLayout());
+                }
+            }
+
             const auto alloc_info = VkDescriptorSetAllocateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                 .descriptorPool = graphics_descriptor_pool_->GetVkDescriptorPool(),
-                .descriptorSetCount = static_cast<uint32_t>(descriptor_set_layout.size()),
-                .pSetLayouts = descriptor_set_layout.data(),
+                .descriptorSetCount = static_cast<uint32_t>(set_layout.size()),
+                .pSetLayouts = set_layout.data(),
             };
+            spdlog::debug("descriptor set count: {}", alloc_info.descriptorSetCount);
             graphics_descriptor_sets_.emplace_back(device, alloc_info);
         }
 
         // update descriptor sets
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
             for (auto model_i = 0; const auto& model : scene_.GetModels()) {
+                spdlog::debug("model_i: {}", model_i);
                 auto descriptor_write = std::vector<VkWriteDescriptorSet>();
                 // transform
                 const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
@@ -583,14 +715,31 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .pImageInfo = &emissive_image_info,
                 });
 
+                // base_color_factor
+                const auto base_color_factor_ubo_buffer_info = VkDescriptorBufferInfo{
+                    .buffer = model.GetMaterialUbo().GetVkUniformBuffer(frame_i),
+                    .offset = 0,
+                    .range = model.GetMaterialUbo().GetUniformBufferObjectSize(),
+                };
+                descriptor_write.emplace_back(VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i + 1),
+                    .dstBinding = 0,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &base_color_factor_ubo_buffer_info,
+                });
+
                 vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
                                        descriptor_write.data(), 0, nullptr);
-                model_i++;
+                model_i += kNumDescriptorSetGraphics;
             }
         }
     }();
 
     // FrameBuffer
+    spdlog::debug("setup frame buffer");
     [&]() {
         framebuffer_.reserve(kMaxFramesInFlight);
         for (size_t frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
@@ -599,6 +748,8 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                  render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kEmissive)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kBaseColorFactor)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -614,6 +765,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // DescriptorPool (Compute)
+    spdlog::debug("setup compute descriptor pool");
     [&]() {
         const auto pool_sizes = std::to_array({
             // transform + camera
@@ -626,10 +778,11 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
             },
-            // color + normal + position + emissive + finalized
+            // color + normal + position + emissive + base color factor + metallic_roughness factor
+            // + finalized
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 5,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 7,
             },
         });
 
@@ -643,6 +796,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // DescriptorSetLayout (Compute)
+    spdlog::debug("setup compute descriptor set layout");
     [&]() {
         compute_descriptor_set_layout_.reserve(kNumDescriptorSetCompute);
 
@@ -708,9 +862,25 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .pImmutableSamplers = nullptr,
                 },
-                // depth
+                // base color factor
                 VkDescriptorSetLayoutBinding{
                     .binding = 4,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // metallic roughness factor
+                VkDescriptorSetLayoutBinding{
+                    .binding = 5,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // depth
+                VkDescriptorSetLayoutBinding{
+                    .binding = 6,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -718,7 +888,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 },
                 // output
                 VkDescriptorSetLayoutBinding{
-                    .binding = 5,
+                    .binding = 7,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -757,6 +927,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // PipelineLayout (Compute)
+    spdlog::debug("setup compute pipeline layout");
     [&]() {
         constexpr auto kPushConstantRanges = std::to_array({VkPushConstantRange{
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -782,6 +953,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // ComputePipeline
+    spdlog::debug("setup compute pipeline");
     [&]() {
         compute_pipeline_.reserve(kMaxFramesInFlight);
         const auto comp_path = std::filesystem::path("rasterize/deferred.comp.spv");
@@ -798,6 +970,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     }();
 
     // DescriptorSets (Compute)
+    spdlog::debug("setup compute descriptor sets");
     [&]() {
         // allocate descriptor sets
         compute_descriptor_sets_.reserve(kMaxFramesInFlight);
@@ -842,6 +1015,16 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             };
             const auto emissive_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kEmissive)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
+            const auto base_color_factor_image_info = VkDescriptorImageInfo{
+                .imageView =
+                    render_targets_.at(RenderTargetType::kBaseColorFactor)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
+            const auto metallic_roughness_factor_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor)
+                                 ->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
             const auto depth_image_info = VkDescriptorImageInfo{
@@ -918,13 +1101,31 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstBinding = 4,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &base_color_factor_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 5,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &metallic_roughness_factor_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 6,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .pImageInfo = &depth_image_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
-                    .dstBinding = 5,
+                    .dstBinding = 7,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -944,6 +1145,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                                    descriptor_write.data(), 0, nullptr);
         }
     }();
+    spdlog::debug("setup done");
 }
 
 void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
@@ -978,6 +1180,20 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
                     {0.0f, 0.0f, 0.0f, 0.0f},
                 },
         },
+        // BaseColorFactor
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 0.0f},
+                },
+        },
+        // MetallicRoughnessFactor
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 0.0f},
+                },
+        },
         // Depth Stencil
         {
             .depthStencil = {1.0f, 0},
@@ -999,7 +1215,7 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
 
     vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      graphics_pipeline_->GetVkGraphicsPipeline());
+                      graphics_pipeline_.at(image_idx).GetVkGraphicsPipeline());
 
     const auto viewport = VkViewport{
         .x = 0.0f,
@@ -1017,21 +1233,24 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    for (const auto&& [model_i, model] : std::ranges::views::enumerate(scene_.GetModels())) {
+    for (auto model_i = 0; const auto& model : scene_.GetModels()) {
         const auto vertex_buffers =
             std::vector<VkBuffer>{model.GetVertexBuffers()[0].GetVertexBuffer()};
         const auto offsets = std::vector<VkDeviceSize>{0};
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.data(), offsets.data());
         vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetIndexBuffer(), 0,
                              VK_INDEX_TYPE_UINT16);
-        const auto descriptor_set =
-            std::to_array({graphics_descriptor_sets_.at(image_idx).GetVkDescriptorSet(model_i)});
+        const auto descriptor_set = std::to_array({
+            graphics_descriptor_sets_.at(image_idx).GetVkDescriptorSet(model_i),
+            graphics_descriptor_sets_.at(image_idx).GetVkDescriptorSet(model_i + 1),
+        });
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                graphics_pipeline_layout_->GetVkPipelineLayout(), 0,
+                                graphics_pipeline_layout_.at(image_idx).GetVkPipelineLayout(), 0,
                                 static_cast<uint32_t>(descriptor_set.size()), descriptor_set.data(),
                                 0, nullptr);
         vkCmdDrawIndexed(command_buffer,
                          static_cast<uint32_t>(model.GetIndexBuffers()[0].GetSize()), 1, 0, 0, 0);
+        model_i += kNumDescriptorSetGraphics;
     }
 
     spdlog::debug("End render pass");

@@ -55,17 +55,25 @@ class DrawRasterize final : public DrawStrategy {
     std::optional<RenderPass> render_pass_;
 
     std::optional<DescriptorPool> graphics_descriptor_pool_;
+    //! (kMaxFramesInFlight,)
     std::vector<DescriptorSets> graphics_descriptor_sets_;
-    std::optional<DescriptorSetLayout> graphics_descriptor_set_layout_;
-    std::optional<PipelineLayout> graphics_pipeline_layout_;
-    std::optional<GraphicsPipeline> graphics_pipeline_;
+    //! (kMaxFramesInFlight,)
+    std::vector<DescriptorSetLayout> graphics_descriptor_set_layout_;
+    //! (kMaxFramesInFlight,)
+    std::vector<PipelineLayout> graphics_pipeline_layout_;
+    //! (kMaxFramesInFlight,)
+    std::vector<GraphicsPipeline> graphics_pipeline_;
 
     std::optional<DescriptorPool> compute_descriptor_pool_;
+    //! (kMaxFramesInFlight,)
     std::vector<DescriptorSets> compute_descriptor_sets_;
+    //! (kMaxFramesInFlight,)
     std::vector<DescriptorSetLayout> compute_descriptor_set_layout_;
+    //! (kMaxFramesInFlight,)
     std::vector<PipelineLayout> compute_pipeline_layout_;
+    //! (kMaxFramesInFlight,)
     std::vector<ComputePipeline> compute_pipeline_;
-
+    //! (kMaxFramesInFlight,)
     std::vector<FrameBuffer> framebuffer_;
 
     // render targets
@@ -75,6 +83,8 @@ class DrawRasterize final : public DrawStrategy {
         kDepthStencil,
         kPosition,
         kEmissive,
+        kBaseColorFactor,
+        kMetallicRoughtnessFactor,
         kFinalized,
         kCount
     };
