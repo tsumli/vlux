@@ -1,6 +1,7 @@
 #include "app.h"
 
 #include <exception>
+#include <vector>
 
 #include "camera.h"
 #include "common/command_buffer.h"
@@ -112,7 +113,8 @@ void App::CreateScene() {
                     std::move(gltf_objects.base_color_factor), gltf_objects.metallic_factor,
                     gltf_objects.roughness_factor, std::move(gltf_objects.base_color_texture),
                     std::move(gltf_objects.normal_texture),
-                    std::move(gltf_objects.emissive_texture));
+                    std::move(gltf_objects.emissive_texture),
+                    std::move(gltf_objects.metallic_roughness_texture));
                 models.emplace_back(std::move(model));
             }
         }

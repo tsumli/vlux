@@ -26,13 +26,15 @@ class Model {
           std::vector<VertexBuffer>&& vertex_buffer, std::vector<IndexBuffer>&& index_buffer,
           glm::vec4&& base_color_factor, const float metallic_factor, const float roughtness_factor,
           std::shared_ptr<Texture>&& base_color_texture, std::shared_ptr<Texture>&& normal_texture,
-          std::shared_ptr<Texture>&& emissive_texture)
+          std::shared_ptr<Texture>&& emissive_texture,
+          std::shared_ptr<Texture>&& metallic_roughness_texture)
         : vertex_buffers_(std::move(vertex_buffer)),
           index_buffers_(std::move(index_buffer)),
           material_ubo_(std::make_unique<UniformBuffer<MaterialParams>>(device, physical_device)),
           base_color_texture_(std::move(base_color_texture)),
           normal_texture_(std::move(normal_texture)),
-          emissive_texture_(std::move(emissive_texture)) {
+          emissive_texture_(std::move(emissive_texture)),
+          metallic_roughness_texture_(std::move(metallic_roughness_texture)) {
         // update ubo
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
             material_ubo_->UpdateUniformBuffer(
@@ -56,6 +58,9 @@ class Model {
     std::shared_ptr<Texture> GetBaseColorTexture() const { return base_color_texture_; }
     std::shared_ptr<Texture> GetNormalTexture() const { return normal_texture_; }
     std::shared_ptr<Texture> GetEmissiveTexture() const { return emissive_texture_; }
+    std::shared_ptr<Texture> GetMetallicRoughnessTexture() const {
+        return metallic_roughness_texture_;
+    }
 
    private:
     std::vector<VertexBuffer> vertex_buffers_;
@@ -66,6 +71,7 @@ class Model {
     std::shared_ptr<Texture> base_color_texture_{nullptr};
     std::shared_ptr<Texture> normal_texture_{nullptr};
     std::shared_ptr<Texture> emissive_texture_{nullptr};
+    std::shared_ptr<Texture> metallic_roughness_texture_{nullptr};
     // std::optional<Texture> occlusion_texture_ = std::nullopt;
 };
 

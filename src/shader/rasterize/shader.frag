@@ -17,6 +17,7 @@ struct MaterialParams {
 layout(set = 0, binding = 1) uniform sampler2D color_sampler;
 layout(set = 0, binding = 2) uniform sampler2D normal_sampler;
 layout(set = 0, binding = 3) uniform sampler2D emissive_sampler;
+layout(set = 0, binding = 4) uniform sampler2D metallic_roughness_sampler;
 
 layout(set = 1, binding = 0) uniform ubo_material { MaterialParams material; };
 
@@ -28,6 +29,7 @@ layout(location = 2) out vec4 out_position;
 layout(location = 3) out vec4 out_emissive;
 layout(location = 4) out vec4 out_base_color_factor;
 layout(location = 5) out vec4 out_metallic_roughness_factor;
+layout(location = 6) out vec4 out_metallic_roughness;
 
 void main() {
     // Texture Loading
@@ -46,4 +48,5 @@ void main() {
     out_emissive = texture(emissive_sampler, frag_input.texcoord);
     out_base_color_factor = material.base_color;
     out_metallic_roughness_factor = material.metallic_roughness;
+    out_metallic_roughness = texture(metallic_roughness_sampler, frag_input.texcoord);
 }
