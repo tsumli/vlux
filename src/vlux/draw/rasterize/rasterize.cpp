@@ -2,9 +2,11 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <utility>
 
 #include "common/descriptor_set_layout.h"
 #include "common/texture_view.h"
@@ -12,6 +14,7 @@
 #include "pch.h"
 #include "scene/scene.h"
 #include "shader/shader.h"
+#include "spdlog/spdlog.h"
 #include "texture/texture_sampler.h"
 #include "transform.h"
 #include "uniform_buffer.h"
@@ -90,6 +93,21 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         position.SetImageView(image_view);
     }();
 
+    // Emissive
+    [&]() {
+        render_targets_[RenderTargetType::kEmissive].emplace(device);
+        auto& emissive = render_targets_.at(RenderTargetType::kEmissive).value();
+        emissive.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, emissive.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, emissive.GetVkImageRef(),
+                    emissive.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(emissive.GetVkImageRef(), emissive.GetVkFormat(), 0,
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        emissive.SetImageView(image_view);
+    }();
+
     // Finalized
     [&]() {
         render_targets_[RenderTargetType::kFinalized].emplace(device);
@@ -107,8 +125,10 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
     // texture sampler
     [&]() {
-        texture_samplers_[TextureSamplerType::kColor].emplace(physical_device, device);
-        texture_samplers_[TextureSamplerType::kNormal].emplace(physical_device, device);
+        for (auto type_i = 0; type_i < std::to_underlying(TextureSamplerType::kCount); type_i++) {
+            texture_samplers_[static_cast<TextureSamplerType>(type_i)].emplace(physical_device,
+                                                                               device);
+        }
     }();
 
     // DescriptorSetLayout
@@ -138,6 +158,14 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = nullptr,
             },
+            // emissive
+            VkDescriptorSetLayoutBinding{
+                .binding = 3,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = nullptr,
+            },
         });
 
         const auto layout_info = VkDescriptorSetLayoutCreateInfo{
@@ -158,10 +186,10 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model,
             },
-            // color + normal
+            // color + normal + emissive
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 2,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 3,
             },
         });
         const auto pool_info = VkDescriptorPoolCreateInfo{
@@ -209,6 +237,17 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             },
+            // Emissive
+            VkAttachmentDescription{
+                .format = render_targets_.at(RenderTargetType::kEmissive)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
             // Depth
             VkAttachmentDescription{
                 .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
@@ -239,9 +278,14 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .attachment = 2,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            // emissive
+            {
+                .attachment = 3,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            },
         });
         constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
-            .attachment = 3,
+            .attachment = 4,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
         subpass.emplace_back(VkSubpassDescription{
@@ -384,6 +428,18 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                   VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
             },
+            // Emissive
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_TRUE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
         });
 
         const auto color_blending = [&]() {
@@ -451,18 +507,6 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         // update descriptor sets
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
             for (auto model_i = 0; const auto& model : scene_.GetModels()) {
-                const auto texture_view = [&]() -> std::optional<TextureView> {
-                    if (model.GetBaseColorTexture() == nullptr ||
-                        model.GetNormalTexture() == nullptr) {
-                        return std::nullopt;
-                    } else {
-                        return std::make_optional(TextureView{
-                            .color = model.GetBaseColorTexture()->GetImageView(),
-                            .normal = model.GetNormalTexture()->GetImageView(),
-                        });
-                    }
-                }();
-
                 auto descriptor_write = std::vector<VkWriteDescriptorSet>();
                 // transform
                 const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
@@ -479,39 +523,66 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .pBufferInfo = &transform_ubo_buffer_info,
                 });
-                if (texture_view.has_value()) {
-                    // color
-                    const auto color_image_info = VkDescriptorImageInfo{
-                        .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
-                        .imageView = texture_view->color,
-                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    };
-                    descriptor_write.emplace_back(VkWriteDescriptorSet{
-                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
-                        .dstBinding = 1,
-                        .dstArrayElement = 0,
-                        .descriptorCount = 1,
-                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                        .pImageInfo = &color_image_info,
-                    });
 
-                    // normal
-                    const auto normal_image_info = VkDescriptorImageInfo{
-                        .sampler = texture_samplers_.at(TextureSamplerType::kNormal)->GetSampler(),
-                        .imageView = texture_view->normal,
-                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    };
-                    descriptor_write.emplace_back(VkWriteDescriptorSet{
-                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
-                        .dstBinding = 2,
-                        .dstArrayElement = 0,
-                        .descriptorCount = 1,
-                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                        .pImageInfo = &normal_image_info,
-                    });
-                }
+                const auto get_image_view = [&](const auto texture) -> VkImageView {
+                    if (texture == nullptr) {
+                        return VK_NULL_HANDLE;
+                    }
+                    return texture->GetImageView();
+                };
+
+                const auto base_color_image_view = get_image_view(model.GetBaseColorTexture());
+                const auto normal_image_view = get_image_view(model.GetNormalTexture());
+                const auto emissive_image_view = get_image_view(model.GetEmissiveTexture());
+
+                // color
+                const auto base_color_image_info = VkDescriptorImageInfo{
+                    .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
+                    .imageView = base_color_image_view,
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                };
+                descriptor_write.emplace_back(VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
+                    .dstBinding = 1,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .pImageInfo = &base_color_image_info,
+                });
+
+                // normal
+                const auto normal_image_info = VkDescriptorImageInfo{
+                    .sampler = texture_samplers_.at(TextureSamplerType::kNormal)->GetSampler(),
+                    .imageView = normal_image_view,
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                };
+                descriptor_write.emplace_back(VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
+                    .dstBinding = 2,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .pImageInfo = &normal_image_info,
+                });
+
+                // emissive
+                const auto emissive_image_info = VkDescriptorImageInfo{
+                    .sampler = texture_samplers_.at(TextureSamplerType::kEmissive)->GetSampler(),
+                    .imageView = emissive_image_view,
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                };
+                descriptor_write.emplace_back(VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = graphics_descriptor_sets_.at(frame_i).GetVkDescriptorSet(model_i),
+                    .dstBinding = 3,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .pImageInfo = &emissive_image_info,
+                });
+
                 vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
                                        descriptor_write.data(), 0, nullptr);
                 model_i++;
@@ -527,6 +598,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 {render_targets_.at(RenderTargetType::kColor)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kNormal)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kEmissive)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -554,10 +626,10 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
             },
-            // color + normal + position + finalized
+            // color + normal + position + emissive + finalized
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 4,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 5,
             },
         });
 
@@ -628,9 +700,17 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .pImmutableSamplers = nullptr,
                 },
-                // depth
+                // emissive
                 VkDescriptorSetLayoutBinding{
                     .binding = 3,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // depth
+                VkDescriptorSetLayoutBinding{
+                    .binding = 4,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -638,7 +718,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 },
                 // output
                 VkDescriptorSetLayoutBinding{
-                    .binding = 4,
+                    .binding = 5,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -760,6 +840,10 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .imageView = render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
+            const auto emissive_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kEmissive)->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
             const auto depth_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
@@ -825,13 +909,22 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstBinding = 3,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &emissive_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 4,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .pImageInfo = &depth_image_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
-                    .dstBinding = 4,
+                    .dstBinding = 5,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -872,6 +965,13 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
                 },
         },
         // Position
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 0.0f},
+                },
+        },
+        // Emissive
         {
             .color =
                 {

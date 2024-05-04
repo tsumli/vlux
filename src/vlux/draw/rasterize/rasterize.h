@@ -69,10 +69,18 @@ class DrawRasterize final : public DrawStrategy {
     std::vector<FrameBuffer> framebuffer_;
 
     // render targets
-    enum class RenderTargetType { kColor, kNormal, kDepthStencil, kPosition, kFinalized, kCount };
+    enum class RenderTargetType {
+        kColor,
+        kNormal,
+        kDepthStencil,
+        kPosition,
+        kEmissive,
+        kFinalized,
+        kCount
+    };
     std::unordered_map<RenderTargetType, std::optional<RenderTarget>> render_targets_;
 
-    enum class TextureSamplerType { kColor, kNormal, kCount };
+    enum class TextureSamplerType { kColor, kNormal, kEmissive, kCount };
     std::unordered_map<TextureSamplerType, std::optional<TextureSampler>> texture_samplers_;
 
     // mode

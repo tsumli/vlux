@@ -11,12 +11,14 @@ struct FragInput {
 
 layout(set = 0, binding = 1) uniform sampler2D color_sampler;
 layout(set = 0, binding = 2) uniform sampler2D normal_sampler;
+layout(set = 0, binding = 3) uniform sampler2D emissive_sampler;
 
 layout(location = 0) in FragInput frag_input;
 
 layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec4 out_normal;
 layout(location = 2) out vec4 out_position;
+layout(location = 3) out vec4 out_emissive;
 
 void main() {
     // Texture Loading
@@ -32,4 +34,5 @@ void main() {
     out_color = texture(color_sampler, frag_input.texcoord);
     out_normal = vec4(normal_ws, 0.0);
     out_position = frag_input.position_ws;
+    out_emissive = texture(emissive_sampler, frag_input.texcoord);
 }

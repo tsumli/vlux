@@ -215,11 +215,33 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         return create_texture(image);
     }();
 
+    auto occlusion_texture = [&]() -> std::shared_ptr<Texture> {
+        const auto idx = material.occlusionTexture.index;
+        if (idx == -1) {
+            spdlog::debug("occlusion texture not found");
+            return nullptr;
+        }
+        auto image = create_image(get_image_idx(idx));
+        return create_texture(image);
+    }();
+
+    auto emmisive_texture = [&]() -> std::shared_ptr<Texture> {
+        const auto idx = material.emissiveTexture.index;
+        if (idx == -1) {
+            spdlog::debug("emmisive texture not found");
+            return nullptr;
+        }
+        auto image = create_image(get_image_idx(idx));
+        return create_texture(image);
+    }();
+
     return {
         .indices = indices,
         .vertices = vertices,
         .base_color_texture = base_color_texture,
         .normal_texture = normal_texture,
+        .occlusion_texture = occlusion_texture,
+        .emissive_texture = emmisive_texture,
     };
 }
 

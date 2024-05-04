@@ -16,6 +16,8 @@ struct GltfObject {
     std::vector<Vertex> vertices;
     std::shared_ptr<Texture> base_color_texture;
     std::shared_ptr<Texture> normal_texture;
+    std::shared_ptr<Texture> occlusion_texture;
+    std::shared_ptr<Texture> emissive_texture;
 };
 
 GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
