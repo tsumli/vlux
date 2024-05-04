@@ -45,12 +45,11 @@ or you can just use VSCode to launch.
   - [x] Multi render targets 
   - [x] Lighting (Blinn Phong)
 - [x] Gamma correction
+- [x] Use config file
 - [ ] Cubemap
 - [ ] Screen space ambient occlusion
 - [ ] Transparent pass
-- [ ] Use config file
 - [ ] Reflection
-- [ ] Cubemap
 - [ ] Reflection
 - [ ] Shadow
 - [ ] LOD
