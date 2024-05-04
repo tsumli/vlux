@@ -1,27 +1,42 @@
 #ifndef MODEL_H
 #define MODEL_H
+#include <vulkan/vulkan_core.h>
+
 #include <memory>
 
 #include "pch.h"
 //
 #include "index.h"
+#include "uniform_buffer.h"
 #include "vertex.h"
 //
 #include "../texture/texture.h"
 
 namespace vlux {
 
+struct MaterialParams {
+    alignas(16) glm::vec4 base_color_factor;
+};
+
 class Model {
    public:
-    Model() = default;
-    Model(std::vector<VertexBuffer>&& vertex_buffer, std::vector<IndexBuffer>&& index_buffer,
-          std::shared_ptr<Texture>&& base_color_texture, std::shared_ptr<Texture>&& normal_texture,
-          std::shared_ptr<Texture>&& emissive_texture)
+    Model() = delete;
+    Model(const VkDevice device, const VkPhysicalDevice physical_device,
+          std::vector<VertexBuffer>&& vertex_buffer, std::vector<IndexBuffer>&& index_buffer,
+          glm::vec4&& base_color_factor, std::shared_ptr<Texture>&& base_color_texture,
+          std::shared_ptr<Texture>&& normal_texture, std::shared_ptr<Texture>&& emissive_texture)
         : vertex_buffers_(std::move(vertex_buffer)),
           index_buffers_(std::move(index_buffer)),
+          base_color_factor_(std::move(base_color_factor)),
+          material_ubo_(std::make_unique<UniformBuffer<MaterialParams>>(device, physical_device)),
           base_color_texture_(std::move(base_color_texture)),
           normal_texture_(std::move(normal_texture)),
-          emissive_texture_(std::move(emissive_texture)) {}
+          emissive_texture_(std::move(emissive_texture)) {
+        // update ubo
+        for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
+            material_ubo_->UpdateUniformBuffer({base_color_factor_}, frame_i);
+        }
+    }
     Model(const Model&) = delete;
     Model& operator=(const Model&) = delete;
     Model(Model&&) = default;
@@ -29,13 +44,20 @@ class Model {
 
     const std::vector<VertexBuffer>& GetVertexBuffers() const { return vertex_buffers_; }
     const std::vector<IndexBuffer>& GetIndexBuffers() const { return index_buffers_; }
-    const std::shared_ptr<Texture> GetBaseColorTexture() const { return base_color_texture_; }
-    const std::shared_ptr<Texture> GetNormalTexture() const { return normal_texture_; }
-    const std::shared_ptr<Texture> GetEmissiveTexture() const { return emissive_texture_; }
+
+    const glm::vec4& GetBaseColorFactor() const { return base_color_factor_; }
+    const UniformBuffer<MaterialParams>& GetMaterialUbo() const { return *material_ubo_; }
+
+    std::shared_ptr<Texture> GetBaseColorTexture() const { return base_color_texture_; }
+    std::shared_ptr<Texture> GetNormalTexture() const { return normal_texture_; }
+    std::shared_ptr<Texture> GetEmissiveTexture() const { return emissive_texture_; }
 
    private:
     std::vector<VertexBuffer> vertex_buffers_;
     std::vector<IndexBuffer> index_buffers_;
+
+    glm::vec4 base_color_factor_{0.0f, 0.0f, 0.0f, 1.0f};
+    std::unique_ptr<UniformBuffer<MaterialParams>> material_ubo_;
 
     std::shared_ptr<Texture> base_color_texture_{nullptr};
     std::shared_ptr<Texture> normal_texture_{nullptr};

@@ -14,6 +14,7 @@ tinygltf::Model LoadTinyGltfModel(const std::filesystem::path& path);
 struct GltfObject {
     std::vector<Index> indices;
     std::vector<Vertex> vertices;
+    glm::vec4 base_color_factor;
     std::shared_ptr<Texture> base_color_texture;
     std::shared_ptr<Texture> normal_texture;
     std::shared_ptr<Texture> occlusion_texture;

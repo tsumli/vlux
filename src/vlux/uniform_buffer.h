@@ -40,7 +40,6 @@ class UniformBuffer {
     VkBuffer GetVkUniformBuffer(const size_t idx) const { return uniform_buffers_[idx]; }
 
     void UpdateUniformBuffer(const UniformBufferObject& params, const uint32_t cur_frame) {
-        spdlog::debug("sizeof(UniformBufferObject): {}", sizeof(UniformBufferObject));
         memcpy(uniform_buffers_mapped_[cur_frame], &params, sizeof(UniformBufferObject));
     }
 
