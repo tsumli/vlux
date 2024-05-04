@@ -1,6 +1,7 @@
 build/
 processed/
 tmp/
+.cache/
 
 # Prerequisites
 *.d
