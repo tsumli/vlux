@@ -41,9 +41,9 @@ or you can just use VSCode to launch.
 ## TODO
 - [x] Mouse control
 - [x] Compute shader
-- [ ] Deferred rendering
+- [x] Deferred rendering
   - [x] Multi render targets 
-  - [ ] Lighting (Blinn Phong)
+  - [x] Lighting (Blinn Phong)
 - [x] Gamma correction
 - [ ] Cubemap
 - [ ] Screen space ambient occlusion
