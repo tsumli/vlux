@@ -11,6 +11,7 @@ struct FragInput {
 
 struct MaterialParams {
     vec4 base_color;
+    vec4 metallic_roughness;
 };
 
 layout(set = 0, binding = 1) uniform sampler2D color_sampler;
@@ -26,6 +27,7 @@ layout(location = 1) out vec4 out_normal;
 layout(location = 2) out vec4 out_position;
 layout(location = 3) out vec4 out_emissive;
 layout(location = 4) out vec4 out_base_color_factor;
+layout(location = 5) out vec4 out_metallic_roughness_factor;
 
 void main() {
     // Texture Loading
@@ -43,4 +45,5 @@ void main() {
     out_position = frag_input.position_ws;
     out_emissive = texture(emissive_sampler, frag_input.texcoord);
     out_base_color_factor = material.base_color;
+    out_metallic_roughness_factor = material.metallic_roughness;
 }

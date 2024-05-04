@@ -3,7 +3,6 @@
 #include "pch.h"
 //
 #include "index.h"
-#include "spdlog/spdlog.h"
 #include "vertex.h"
 //
 #include "../texture/texture.h"
@@ -15,6 +14,8 @@ struct GltfObject {
     std::vector<Index> indices;
     std::vector<Vertex> vertices;
     glm::vec4 base_color_factor;
+    float metallic_factor;
+    float roughness_factor;
     std::shared_ptr<Texture> base_color_texture;
     std::shared_ptr<Texture> normal_texture;
     std::shared_ptr<Texture> occlusion_texture;

@@ -84,6 +84,7 @@ class DrawRasterize final : public DrawStrategy {
         kPosition,
         kEmissive,
         kBaseColorFactor,
+        kMetallicRoughtnessFactor,
         kFinalized,
         kCount
     };

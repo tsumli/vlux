@@ -16,6 +16,7 @@ namespace vlux {
 
 struct MaterialParams {
     alignas(16) glm::vec4 base_color_factor;
+    alignas(16) glm::vec4 metallic_roughnes_factor;
 };
 
 class Model {
@@ -23,18 +24,23 @@ class Model {
     Model() = delete;
     Model(const VkDevice device, const VkPhysicalDevice physical_device,
           std::vector<VertexBuffer>&& vertex_buffer, std::vector<IndexBuffer>&& index_buffer,
-          glm::vec4&& base_color_factor, std::shared_ptr<Texture>&& base_color_texture,
-          std::shared_ptr<Texture>&& normal_texture, std::shared_ptr<Texture>&& emissive_texture)
+          glm::vec4&& base_color_factor, const float metallic_factor, const float roughtness_factor,
+          std::shared_ptr<Texture>&& base_color_texture, std::shared_ptr<Texture>&& normal_texture,
+          std::shared_ptr<Texture>&& emissive_texture)
         : vertex_buffers_(std::move(vertex_buffer)),
           index_buffers_(std::move(index_buffer)),
-          base_color_factor_(std::move(base_color_factor)),
           material_ubo_(std::make_unique<UniformBuffer<MaterialParams>>(device, physical_device)),
           base_color_texture_(std::move(base_color_texture)),
           normal_texture_(std::move(normal_texture)),
           emissive_texture_(std::move(emissive_texture)) {
         // update ubo
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            material_ubo_->UpdateUniformBuffer({base_color_factor_}, frame_i);
+            material_ubo_->UpdateUniformBuffer(
+                {
+                    .base_color_factor = base_color_factor,
+                    .metallic_roughnes_factor = glm::vec4(metallic_factor, roughtness_factor, 0, 0),
+                },
+                frame_i);
         }
     }
     Model(const Model&) = delete;
@@ -45,7 +51,6 @@ class Model {
     const std::vector<VertexBuffer>& GetVertexBuffers() const { return vertex_buffers_; }
     const std::vector<IndexBuffer>& GetIndexBuffers() const { return index_buffers_; }
 
-    const glm::vec4& GetBaseColorFactor() const { return base_color_factor_; }
     const UniformBuffer<MaterialParams>& GetMaterialUbo() const { return *material_ubo_; }
 
     std::shared_ptr<Texture> GetBaseColorTexture() const { return base_color_texture_; }
@@ -56,7 +61,6 @@ class Model {
     std::vector<VertexBuffer> vertex_buffers_;
     std::vector<IndexBuffer> index_buffers_;
 
-    glm::vec4 base_color_factor_{0.0f, 0.0f, 0.0f, 1.0f};
     std::unique_ptr<UniformBuffer<MaterialParams>> material_ubo_;
 
     std::shared_ptr<Texture> base_color_texture_{nullptr};

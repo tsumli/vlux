@@ -182,6 +182,8 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
                                              material.pbrMetallicRoughness.baseColorFactor[1],
                                              material.pbrMetallicRoughness.baseColorFactor[2],
                                              material.pbrMetallicRoughness.baseColorFactor[3]);
+    const auto metallic_factor = static_cast<float>(material.pbrMetallicRoughness.metallicFactor);
+    const auto roughness_factor = static_cast<float>(material.pbrMetallicRoughness.roughnessFactor);
 
     // texture
     const auto get_image_idx = [&](const auto texture_idx) {
@@ -243,6 +245,8 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         .indices = indices,
         .vertices = vertices,
         .base_color_factor = base_color_factor,
+        .metallic_factor = metallic_factor,
+        .roughness_factor = roughness_factor,
         .base_color_texture = base_color_texture,
         .normal_texture = normal_texture,
         .occlusion_texture = occlusion_texture,

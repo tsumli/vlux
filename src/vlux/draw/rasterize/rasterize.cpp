@@ -2,14 +2,7 @@
 
 #include <vulkan/vulkan_core.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <memory>
-#include <utility>
-
 #include "common/descriptor_set_layout.h"
-#include "common/texture_view.h"
 #include "device_resource/device_resource.h"
 #include "pch.h"
 #include "scene/scene.h"
@@ -124,6 +117,24 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             CreateImageView(base_color_factor.GetVkImageRef(), base_color_factor.GetVkFormat(), 0,
                             VK_IMAGE_ASPECT_COLOR_BIT, device);
         base_color_factor.SetImageView(image_view);
+    }();
+
+    // MetallicRoughnessFactor
+    [&]() {
+        render_targets_[RenderTargetType::kMetallicRoughtnessFactor].emplace(device);
+        auto& metallic_roughtness_factor =
+            render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor).value();
+        metallic_roughtness_factor.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
+        CreateImage(width, height, metallic_roughtness_factor.GetVkFormat(),
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, metallic_roughtness_factor.GetVkImageRef(),
+                    metallic_roughtness_factor.GetVkDeviceMemoryRef(), device, physical_device);
+        const auto image_view = CreateImageView(metallic_roughtness_factor.GetVkImageRef(),
+                                                metallic_roughtness_factor.GetVkFormat(), 0,
+                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
+        metallic_roughtness_factor.SetImageView(image_view);
     }();
 
     // Finalized
@@ -302,6 +313,18 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             },
+            // MetallicRoughnessFactor
+            VkAttachmentDescription{
+                .format =
+                    render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor)->GetVkFormat(),
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
             // Depth
             VkAttachmentDescription{
                 .format = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkFormat(),
@@ -337,14 +360,19 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .attachment = 3,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
-            // bse color factor
+            // base color factor
             {
                 .attachment = 4,
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
+            // metallic roughness factor
+            {
+                .attachment = 5,
+                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
         });
         constexpr auto kDepthStencilAttachmentRef = VkAttachmentReference{
-            .attachment = 5,
+            .attachment = 6,
             .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
         subpass.emplace_back(VkSubpassDescription{
@@ -510,7 +538,19 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             },
             // BaseColorFactor
             VkPipelineColorBlendAttachmentState{
-                .blendEnable = VK_TRUE,
+                .blendEnable = VK_FALSE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            },
+            // MetallicRoughnessFactor
+            VkPipelineColorBlendAttachmentState{
+                .blendEnable = VK_FALSE,
                 .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
                 .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
                 .colorBlendOp = VK_BLEND_OP_ADD,
@@ -709,6 +749,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                  render_targets_.at(RenderTargetType::kPosition)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kEmissive)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kBaseColorFactor)->GetVkImageView(),
+                 render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor)->GetVkImageView(),
                  render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView()});
             const auto framebuffer_info = VkFramebufferCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -737,10 +778,11 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
             },
-            // color + normal + position + emissive + finalized
+            // color + normal + position + emissive + base color factor + metallic_roughness factor
+            // + finalized
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 5,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 7,
             },
         });
 
@@ -828,9 +870,17 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .pImmutableSamplers = nullptr,
                 },
-                // depth
+                // metallic roughness factor
                 VkDescriptorSetLayoutBinding{
                     .binding = 5,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = nullptr,
+                },
+                // depth
+                VkDescriptorSetLayoutBinding{
+                    .binding = 6,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -838,7 +888,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 },
                 // output
                 VkDescriptorSetLayoutBinding{
-                    .binding = 6,
+                    .binding = 7,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -972,6 +1022,11 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     render_targets_.at(RenderTargetType::kBaseColorFactor)->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
+            const auto metallic_roughness_factor_image_info = VkDescriptorImageInfo{
+                .imageView = render_targets_.at(RenderTargetType::kMetallicRoughtnessFactor)
+                                 ->GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
             const auto depth_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
@@ -1055,13 +1110,22 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstBinding = 5,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &metallic_roughness_factor_image_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 6,
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .pImageInfo = &depth_image_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstSet = compute_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
-                    .dstBinding = 6,
+                    .dstBinding = 7,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -1117,6 +1181,13 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
                 },
         },
         // BaseColorFactor
+        {
+            .color =
+                {
+                    {0.0f, 0.0f, 0.0f, 0.0f},
+                },
+        },
+        // MetallicRoughnessFactor
         {
             .color =
                 {

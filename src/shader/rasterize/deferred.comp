@@ -34,8 +34,9 @@ layout(rgba32f, set = 1, binding = 1) uniform readonly image2D normal;
 layout(rgba32f, set = 1, binding = 2) uniform readonly image2D position;
 layout(rgba32f, set = 1, binding = 3) uniform readonly image2D emissive;
 layout(rgba32f, set = 1, binding = 4) uniform readonly image2D base_color_factor;
-layout(r32f, set = 1, binding = 5) uniform image2D depth;
-layout(rgba32f, set = 1, binding = 6) uniform writeonly image2D result;
+layout(rgba32f, set = 1, binding = 5) uniform readonly image2D metallic_roughness_factor;
+layout(r32f, set = 1, binding = 6) uniform image2D depth;
+layout(rgba32f, set = 1, binding = 7) uniform writeonly image2D result;
 
 layout(set = 2, binding = 0) uniform ubo_light { LightParams light; };
 
@@ -80,6 +81,8 @@ void main() {
 
     const vec4 pixel_base_color_factor =
         imageLoad(base_color_factor, ivec2(gl_GlobalInvocationID.xy));
+    const vec4 pixel_metallic_roughness_factor =
+        imageLoad(metallic_roughness_factor, ivec2(gl_GlobalInvocationID.xy));
     const vec4 pixel_color =
         imageLoad(color, ivec2(gl_GlobalInvocationID.xy)) * pixel_base_color_factor;
     const vec4 pixel_normal = imageLoad(normal, ivec2(gl_GlobalInvocationID.xy));
@@ -123,6 +126,10 @@ void main() {
         case 8:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy),
                        vec4(pixel_base_color_factor.xyz, 1.0f));
+            break;
+        case 9:
+            imageStore(result, ivec2(gl_GlobalInvocationID.xy),
+                       vec4(pixel_metallic_roughness_factor.xyz, 1.0f));
             break;
         default:
             break;
