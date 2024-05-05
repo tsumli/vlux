@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 SHELL ["/bin/bash", "-c"]
 
 RUN apt update
@@ -13,11 +13,25 @@ RUN apt install -y \
     wget \
     curl \
     cmake \
+    libvulkan-dev \
     software-properties-common \
     unzip \
     vim \
     ninja-build \
-    xserver-xorg
+    xserver-xorg \
+    libx11-dev \
+    zlib1g-dev \
+    libxext-dev \
+    xdg-user-dirs \
+    libgl1-mesa-dev \
+    freeglut3-dev \
+    mesa-utils \
+    vulkan-tools \
+    libvulkan-dev \
+    libglfw3-dev \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # install gcc/gdb
 RUN wget https://github.com/gcc-mirror/gcc/archive/refs/tags/releases/gcc-13.2.0.tar.gz &&\
@@ -42,6 +56,10 @@ RUN wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | tee /etc/
 RUN wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
 RUN apt update
 RUN apt install -y vulkan-sdk
+
+COPY docker/nvidia_icd.json /usr/share/vulkan/icd.d/
+ARG XDG_RUNTIME_DIR="/tmp/xdg_runtime_dir"
+RUN mkdir -p ${XDG_RUNTIME_DIR} && chmod 777 ${XDG_RUNTIME_DIR}
 
 ## tools
 RUN apt install -y \
@@ -71,10 +89,20 @@ RUN apt-get install -y cmake
 
 # modify permission
 ARG USER
+ARG GROUP
 ARG UID=1000
 ARG GID=1000
-RUN groupadd -g $GID $USER && \
-    useradd -m -u $UID -g $GID $USER
+RUN groupadd -g $GID $GROUP
+RUN useradd -m -u $UID -g $GID $USER && \
+        echo "$USER:$GID" | chpasswd && \
+        usermod --shell /bin/bash $USER && \
+        usermod -aG sudo $USER && \
+        mkdir /etc/sudoers.d && \
+        echo "$USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USER && \
+        chmod 0440 /etc/sudoers.d/$USER && \
+        usermod  --uid $UID $USER && \
+        groupmod --gid $GID $USER
+RUN apt install sudo
 USER ${USER}
 ENV HOME /home/${USER}
 
@@ -84,3 +112,10 @@ ENV PATH=/home/${USER}/.cargo/bin:${PATH}
 RUN rustup update
 RUN rustup install nightly
 RUN rustup component add clippy rls rust-analysis rust-src rust-docs rustfmt rust-analyzer
+
+# post process
+SHELL ["/bin/bash", "-l", "-c"]
+RUN echo "export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json" >> ~/.bashrc
+RUN echo "export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> ~/.bashrc
+ENV NVIDIA_VISIBLE_DEVICES ${NVIDIA_VISIBLE_DEVICES:-all}
+ENV NVIDIA_DRIVER_CAPABILITIES ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics
