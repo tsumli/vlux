@@ -14,11 +14,11 @@ template <PixelType T>
 class Texture {
    public:
     Texture(const Image<T>& image, const VkQueue graphics_queue, const VkCommandPool command_pool,
-            const VkDevice device, const VkPhysicalDevice physical_device)
+            const VkDevice device, const VkPhysicalDevice physical_device,
+            const VkFormat format = VK_FORMAT_R8G8B8A8_UNORM)
         : device_(device) {
         VkBuffer staging_buffer;
         VkDeviceMemory staging_buffer_memory;
-        const auto format = VK_FORMAT_R8G8B8A8_UNORM;
         CreateBuffer(image.GetSize(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                      staging_buffer, staging_buffer_memory, device, physical_device);
