@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include "common/image.h"
 #include "pch.h"
 //
 #include "index.h"
@@ -21,13 +22,16 @@ struct MaterialParams {
 
 class Model {
    public:
+    using ModelPixelType = uint8_t;
+
     Model() = delete;
     Model(const VkDevice device, const VkPhysicalDevice physical_device,
           std::vector<VertexBuffer>&& vertex_buffer, std::vector<IndexBuffer>&& index_buffer,
           glm::vec4&& base_color_factor, const float metallic_factor, const float roughtness_factor,
-          std::shared_ptr<Texture>&& base_color_texture, std::shared_ptr<Texture>&& normal_texture,
-          std::shared_ptr<Texture>&& emissive_texture,
-          std::shared_ptr<Texture>&& metallic_roughness_texture)
+          std::shared_ptr<Texture<ModelPixelType>>&& base_color_texture,
+          std::shared_ptr<Texture<ModelPixelType>>&& normal_texture,
+          std::shared_ptr<Texture<ModelPixelType>>&& emissive_texture,
+          std::shared_ptr<Texture<ModelPixelType>>&& metallic_roughness_texture)
         : vertex_buffers_(std::move(vertex_buffer)),
           index_buffers_(std::move(index_buffer)),
           material_ubo_(std::make_unique<UniformBuffer<MaterialParams>>(device, physical_device)),
@@ -55,10 +59,14 @@ class Model {
 
     const UniformBuffer<MaterialParams>& GetMaterialUbo() const { return *material_ubo_; }
 
-    std::shared_ptr<Texture> GetBaseColorTexture() const { return base_color_texture_; }
-    std::shared_ptr<Texture> GetNormalTexture() const { return normal_texture_; }
-    std::shared_ptr<Texture> GetEmissiveTexture() const { return emissive_texture_; }
-    std::shared_ptr<Texture> GetMetallicRoughnessTexture() const {
+    std::shared_ptr<Texture<ModelPixelType>> GetBaseColorTexture() const {
+        return base_color_texture_;
+    }
+    std::shared_ptr<Texture<ModelPixelType>> GetNormalTexture() const { return normal_texture_; }
+    std::shared_ptr<Texture<ModelPixelType>> GetEmissiveTexture() const {
+        return emissive_texture_;
+    }
+    std::shared_ptr<Texture<ModelPixelType>> GetMetallicRoughnessTexture() const {
         return metallic_roughness_texture_;
     }
 
@@ -68,10 +76,10 @@ class Model {
 
     std::unique_ptr<UniformBuffer<MaterialParams>> material_ubo_;
 
-    std::shared_ptr<Texture> base_color_texture_{nullptr};
-    std::shared_ptr<Texture> normal_texture_{nullptr};
-    std::shared_ptr<Texture> emissive_texture_{nullptr};
-    std::shared_ptr<Texture> metallic_roughness_texture_{nullptr};
+    std::shared_ptr<Texture<ModelPixelType>> base_color_texture_{nullptr};
+    std::shared_ptr<Texture<ModelPixelType>> normal_texture_{nullptr};
+    std::shared_ptr<Texture<ModelPixelType>> emissive_texture_{nullptr};
+    std::shared_ptr<Texture<ModelPixelType>> metallic_roughness_texture_{nullptr};
     // std::optional<Texture> occlusion_texture_ = std::nullopt;
 };
 

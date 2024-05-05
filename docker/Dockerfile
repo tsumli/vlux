@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+FROM nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04
 SHELL ["/bin/bash", "-c"]
 
 RUN apt update
@@ -94,14 +94,14 @@ ARG UID=1000
 ARG GID=1000
 RUN groupadd -g $GID $GROUP
 RUN useradd -m -u $UID -g $GID $USER && \
-        echo "$USER:$GID" | chpasswd && \
-        usermod --shell /bin/bash $USER && \
-        usermod -aG sudo $USER && \
-        mkdir /etc/sudoers.d && \
-        echo "$USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USER && \
-        chmod 0440 /etc/sudoers.d/$USER && \
-        usermod  --uid $UID $USER && \
-        groupmod --gid $GID $USER
+    echo "$USER:$GID" | chpasswd && \
+    usermod --shell /bin/bash $USER && \
+    usermod -aG sudo $USER && \
+    mkdir /etc/sudoers.d && \
+    echo "$USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USER && \
+    chmod 0440 /etc/sudoers.d/$USER && \
+    usermod  --uid $UID $USER && \
+    groupmod --gid $GID $USER
 RUN apt install sudo
 USER ${USER}
 ENV HOME /home/${USER}

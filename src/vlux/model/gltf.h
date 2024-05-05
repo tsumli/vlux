@@ -1,11 +1,16 @@
 #ifndef GLTF_H
 #define GLTF_H
+#include "common/image.h"
 #include "pch.h"
 //
 #include "index.h"
 #include "vertex.h"
 //
 #include "../texture/texture.h"
+
+namespace vlux::internal {
+bool ComputeTangentFrame(std::vector<Vertex>& vertices, const std::vector<Index>& indices);
+}  // namespace vlux::internal
 
 namespace vlux {
 tinygltf::Model LoadTinyGltfModel(const std::filesystem::path& path);
@@ -16,11 +21,11 @@ struct GltfObject {
     glm::vec4 base_color_factor;
     float metallic_factor;
     float roughness_factor;
-    std::shared_ptr<Texture> base_color_texture;
-    std::shared_ptr<Texture> normal_texture;
-    std::shared_ptr<Texture> occlusion_texture;
-    std::shared_ptr<Texture> emissive_texture;
-    std::shared_ptr<Texture> metallic_roughness_texture;
+    std::shared_ptr<Texture<uint8_t>> base_color_texture;
+    std::shared_ptr<Texture<uint8_t>> normal_texture;
+    std::shared_ptr<Texture<uint8_t>> occlusion_texture;
+    std::shared_ptr<Texture<uint8_t>> emissive_texture;
+    std::shared_ptr<Texture<uint8_t>> metallic_roughness_texture;
 };
 
 /**

@@ -19,4 +19,15 @@ void ReadEXR(const std::filesystem::path& filename, std::vector<float>& pixels, 
     free(rgba);
 }
 
+void WriteEXR(const std::filesystem::path& filename, const std::vector<float>& pixels,
+              const int width, const int height, const int channels) {
+    const auto exr_filename = filename.string();
+    const char* err = nullptr;
+    const auto ret =
+        SaveEXR(pixels.data(), width, height, channels, /*fp16=*/0, exr_filename.c_str(), &err);
+    if (ret != TINYEXR_SUCCESS) {
+        throw std::runtime_error(fmt::format("failed to save EXR file: {}", err));
+    }
+}
+
 }  // namespace vlux

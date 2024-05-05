@@ -49,36 +49,9 @@ std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
     }
     return tangents;
 }
-}  // namespace
+}  // namespace vlux::internal
 
-tinygltf::Model LoadTinyGltfModel(const std::filesystem::path& path) {
-    if (!std::filesystem::exists(path)) {
-        throw std::runtime_error(fmt::format("file not found: {}", path.string()));
-    }
-    tinygltf::Model model;
-    std::string err;
-    std::string warn;
-
-    static tinygltf::TinyGLTF gltf;
-
-    if (path.extension().string() == ".glb") {
-        if (!gltf.LoadBinaryFromFile(&model, &err, &warn, path.string())) {
-            spdlog::debug("Err: {}", err);
-            spdlog::debug("Warn: {}", warn);
-            throw std::runtime_error(fmt::format("failed to load: {}", path.string()));
-        }
-    } else if (path.extension().string() == ".gltf") {
-        if (!gltf.LoadASCIIFromFile(&model, &err, &warn, path.string())) {
-            spdlog::debug("Err: {}", err);
-            spdlog::debug("Warn: {}", warn);
-            throw std::runtime_error(fmt::format("failed to load: {}", path.string()));
-        }
-    } else {
-        throw std::runtime_error(fmt::format("unsupported file format: {}", path.string()));
-    }
-    return model;
-}
-
+namespace vlux {
 GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
                            const VkQueue graphics_queue, const VkCommandPool command_pool,
                            const VkPhysicalDevice physical_device, const VkDevice device,
@@ -216,11 +189,11 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
     };
 
     const auto create_texture = [&](const auto& image) {
-        return std::make_shared<Texture>(image, graphics_queue, command_pool, device,
-                                         physical_device);
+        return std::make_shared<Texture<uint8_t>>(image, graphics_queue, command_pool, device,
+                                                  physical_device);
     };
 
-    auto base_color_texture = [&]() -> std::shared_ptr<Texture> {
+    auto base_color_texture = [&]() -> std::shared_ptr<Texture<uint8_t>> {
         const auto idx = material.pbrMetallicRoughness.baseColorTexture.index;
         if (idx == -1) {
             return nullptr;
@@ -229,7 +202,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         return create_texture(image);
     }();
 
-    auto normal_texture = [&]() -> std::shared_ptr<Texture> {
+    auto normal_texture = [&]() -> std::shared_ptr<Texture<uint8_t>> {
         const auto idx = material.normalTexture.index;
         if (idx == -1) {
             return nullptr;
@@ -238,7 +211,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         return create_texture(image);
     }();
 
-    auto occlusion_texture = [&]() -> std::shared_ptr<Texture> {
+    auto occlusion_texture = [&]() -> std::shared_ptr<Texture<uint8_t>> {
         const auto idx = material.occlusionTexture.index;
         if (idx == -1) {
             return nullptr;
@@ -247,7 +220,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         return create_texture(image);
     }();
 
-    auto emmisive_texture = [&]() -> std::shared_ptr<Texture> {
+    auto emmisive_texture = [&]() -> std::shared_ptr<Texture<uint8_t>> {
         const auto idx = material.emissiveTexture.index;
         if (idx == -1) {
             return nullptr;
@@ -256,7 +229,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         return create_texture(image);
     }();
 
-    auto metallic_roughness_texture = [&]() -> std::shared_ptr<Texture> {
+    auto metallic_roughness_texture = [&]() -> std::shared_ptr<Texture<uint8_t>> {
         const auto idx = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
         if (idx == -1) {
             return nullptr;
@@ -279,4 +252,31 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
     };
 }
 
+tinygltf::Model LoadTinyGltfModel(const std::filesystem::path& path) {
+    if (!std::filesystem::exists(path)) {
+        throw std::runtime_error(fmt::format("file not found: {}", path.string()));
+    }
+    tinygltf::Model model;
+    std::string err;
+    std::string warn;
+
+    static tinygltf::TinyGLTF gltf;
+
+    if (path.extension().string() == ".glb") {
+        if (!gltf.LoadBinaryFromFile(&model, &err, &warn, path.string())) {
+            spdlog::debug("Err: {}", err);
+            spdlog::debug("Warn: {}", warn);
+            throw std::runtime_error(fmt::format("failed to load: {}", path.string()));
+        }
+    } else if (path.extension().string() == ".gltf") {
+        if (!gltf.LoadASCIIFromFile(&model, &err, &warn, path.string())) {
+            spdlog::debug("Err: {}", err);
+            spdlog::debug("Warn: {}", warn);
+            throw std::runtime_error(fmt::format("failed to load: {}", path.string()));
+        }
+    } else {
+        throw std::runtime_error(fmt::format("unsupported file format: {}", path.string()));
+    }
+    return model;
+}
 }  // namespace vlux

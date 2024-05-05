@@ -10,9 +10,10 @@
 
 namespace vlux {
 
+template <PixelType T>
 class Texture {
    public:
-    Texture(const Image& image, const VkQueue graphics_queue, const VkCommandPool command_pool,
+    Texture(const Image<T>& image, const VkQueue graphics_queue, const VkCommandPool command_pool,
             const VkDevice device, const VkPhysicalDevice physical_device)
         : device_(device) {
         VkBuffer staging_buffer;

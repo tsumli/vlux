@@ -24,6 +24,9 @@ inline std::vector<char> ReadFile(const std::filesystem::path& filename) {
 void ReadEXR(const std::filesystem::path& filename, std::vector<float>& pixels, int& width,
              int& height, int& channels);
 
+void WriteEXR(const std::filesystem::path& filename, const std::vector<float>& pixels,
+              const int width, const int height, const int channels);
+
 inline nlohmann::json ReadJsonFile(const std::filesystem::path& filename) {
     if (!std::filesystem::exists(filename)) {
         throw std::runtime_error(fmt::format("file: {} does not exist", filename.string()));
