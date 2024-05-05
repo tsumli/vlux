@@ -24,6 +24,11 @@
                 0.0,
                 0.0,
                 0.0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
+                0.0
             ]
         },
         {
@@ -33,6 +38,11 @@
             "translation": [
                 0.0,
                 5.0,
+                0.0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
                 0.0
             ]
         },
@@ -44,16 +54,11 @@
                 30.0,
                 5.0,
                 0.0
-            ]
-        },
-        {
-            "name": "Lantern",
-            "path": "assets/gltf-samples/2.0/Lantern/glTF/Lantern.gltf",
-            "scale": 0.8,
-            "translation": [
-                60.0,
-                10.0,
-                10.0
+            ],
+            "rotation": [
+                0.0,
+                90.0,
+                180.0
             ]
         }
     ]

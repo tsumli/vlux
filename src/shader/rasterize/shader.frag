@@ -32,8 +32,9 @@ layout(location = 5) out vec4 out_metallic_roughness_factor;
 layout(location = 6) out vec4 out_metallic_roughness;
 
 void main() {
+    const vec2 texcoord = frag_input.texcoord;
     // Texture Loading
-    vec3 normal_ts = texture(normal_sampler, frag_input.texcoord).xyz;
+    vec3 normal_ts = texture(normal_sampler, texcoord).xyz;
     normal_ts = normalize(normal_ts * 2.0f - 1.0f);
 
     // TBN matrix
@@ -42,11 +43,11 @@ void main() {
                normalize(frag_input.normal_ws));
     vec3 normal_ws = tangent_frame_ws * normal_ts;
 
-    out_color = texture(color_sampler, frag_input.texcoord);
+    out_color = texture(color_sampler, texcoord);
     out_normal = vec4(normal_ws, 0.0);
     out_position = frag_input.position_ws;
-    out_emissive = texture(emissive_sampler, frag_input.texcoord);
+    out_emissive = texture(emissive_sampler, texcoord);
     out_base_color_factor = material.base_color;
     out_metallic_roughness_factor = material.metallic_roughness;
-    out_metallic_roughness = texture(metallic_roughness_sampler, frag_input.texcoord);
+    out_metallic_roughness = texture(metallic_roughness_sampler, texcoord);
 }
