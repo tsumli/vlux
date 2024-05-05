@@ -6,44 +6,48 @@ namespace vlux {
 
 namespace {
 
-bool ComputeTangentFrame(std::vector<Vertex>& vertices, const std::vector<Index>& indices) {
+std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
+                                           const std::vector<Index>& indices) {
     if (vertices.size() % 3 != 0) {
-        return false;
+        throw std::runtime_error(
+            fmt::format("vertices size: {} must be multiple of 3", vertices.size()));
     }
+
+    auto tangents = std::vector<glm::vec4>(vertices.size());
     for (size_t i = 0; i < vertices.size(); i += 3) {
         auto& v0 = vertices[indices[i]];
         auto& v1 = vertices[indices[i + 1]];
         auto& v2 = vertices[indices[i + 2]];
 
-        auto edge_1 = v1.pos - v0.pos;
-        auto edge_2 = v2.pos - v0.pos;
-        auto delta_uv_1 = v1.uv - v0.uv;
-        auto delta_uv_2 = v2.uv - v0.uv;
+        const auto edge_1 = v1.pos - v0.pos;
+        const auto edge_2 = v2.pos - v0.pos;
+        const auto delta_uv_1 = v1.uv - v0.uv;
+        const auto delta_uv_2 = v2.uv - v0.uv;
 
-        float f = 1.0f / (delta_uv_1.x * delta_uv_2.y - delta_uv_2.x * delta_uv_1.y);
-
-        glm::vec3 tangent;
-        tangent.x = f * (delta_uv_2.y * edge_1.x - delta_uv_1.y * edge_2.x);
-        tangent.y = f * (delta_uv_2.y * edge_1.y - delta_uv_1.y * edge_2.y);
-        tangent.z = f * (delta_uv_2.y * edge_1.z - delta_uv_1.y * edge_2.z);
-
-        glm::vec3 bitangent;
-        bitangent.x = f * (-delta_uv_2.x * edge_1.x + delta_uv_1.x * edge_2.x);
-        bitangent.y = f * (-delta_uv_2.x * edge_1.y + delta_uv_1.x * edge_2.y);
-        bitangent.z = f * (-delta_uv_2.x * edge_1.z + delta_uv_1.x * edge_2.z);
-
-        // Normalize the tangent
-        tangent = glm::normalize(tangent);
+        const auto det = delta_uv_1.x * delta_uv_2.y - delta_uv_2.x * delta_uv_1.y;
+        glm::vec3 tangent, bitangent;
+        float f;
+        if (std::abs(det) < 1e-8f) {  // Use default values when det is very small
+            // Default tangent and bitangent if determinant is too small
+            tangent = glm::vec3(1.0, 0.0, 0.0);    // Arbitrary choice, adjust as needed
+            bitangent = glm::vec3(0.0, 1.0, 0.0);  // Make sure it's orthogonal to the tangent
+        } else {
+            f = 1.0f / det;
+            tangent = f * (delta_uv_2.y * edge_1 - delta_uv_1.y * edge_2);
+            bitangent = f * (-delta_uv_2.x * edge_1 + delta_uv_1.x * edge_2);
+            tangent = glm::normalize(tangent);  // Normalize the tangent to avoid scaling issues
+        }
 
         // Compute the handedness (whether the bitangent needs to be flipped)
-        float handedness =
+        const auto handedness =
             (glm::dot(glm::cross(v0.normal, tangent), bitangent) < 0.0f) ? -1.0f : 1.0f;
 
         // Store the tangent and its handedness in the vertex
-        v0.tangent = glm::vec4(tangent, handedness);
-        // Repeat storing the tangent and handedness for v1 and v2 if averaging is not applied
+        tangents[indices[i]] = glm::vec4(tangent, handedness);
+        tangents[indices[i + 1]] = glm::vec4(tangent, handedness);
+        tangents[indices[i + 2]] = glm::vec4(tangent, handedness);
     }
-    return true;
+    return tangents;
 }
 }  // namespace
 
@@ -78,7 +82,8 @@ tinygltf::Model LoadTinyGltfModel(const std::filesystem::path& path) {
 GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
                            const VkQueue graphics_queue, const VkCommandPool command_pool,
                            const VkPhysicalDevice physical_device, const VkDevice device,
-                           const float scale, const glm::vec3 translation) {
+                           const float scale, const glm::vec3& translation,
+                           const glm::vec3& rotation) {
     auto indices = std::vector<Index>();
     [&]() {
         {
@@ -111,10 +116,24 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         std::random_device rd{};
         std::mt19937 gen(rd());
         std::uniform_real_distribution<float> dis(0.0, 1.0);
+
+        // Create rotation matrices
+        glm::mat4 rot_yaw =
+            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 rot_pitch =
+            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), glm::vec3(1.0f, 0.0f, 0.0f));
+        glm::mat4 rot_roll =
+            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+        const auto rotation_matrix = rot_yaw * rot_pitch * rot_roll;
         for (size_t i = 0; i < vertices_size; ++i) {
-            vertices[i].pos = {pos[i * 3 + 0] * scale + translation.x,
-                               pos[i * 3 + 1] * scale + translation.y,
-                               pos[i * 3 + 2] * scale + translation.z};
+            vertices[i].pos = {pos[i * 3 + 0], pos[i * 3 + 1], pos[i * 3 + 2]};
+
+            // Rotate
+            vertices[i].pos = glm::vec3(rotation_matrix * glm::vec4(vertices[i].pos, 1.0f));
+
+            // scale + translation
+            vertices[i].pos = vertices[i].pos * scale + translation;
         }
     }();
 
@@ -167,9 +186,9 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
                 uvs[i] = vertices[i].uv;
             }
 
-            auto tangents = std::vector<glm::vec4>(vertices_size);
-            if (!ComputeTangentFrame(vertices, indices)) {
-                spdlog::warn("failed to compute tangent frame");
+            auto tangents = ComputeTangentFrame(vertices, indices);
+            for (size_t i = 0; i < vertices_size; i++) {
+                vertices[i].tangent = {tangents[i].x, tangents[i].y, tangents[i].z, tangents[i].w};
             }
         }
     }();

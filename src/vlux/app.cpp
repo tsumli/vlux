@@ -94,6 +94,7 @@ void App::CreateScene() {
         const auto path = model_config.at("path").get<std::filesystem::path>();
         const auto scale = model_config.at("scale").get<float>();
         const auto translation = model_config.at("translation").get<std::array<float, 3>>();
+        const auto rotation = model_config.at("rotation").get<std::array<float, 3>>();
 
         spdlog::debug("load {}", name);
         const auto gltf_model = LoadTinyGltfModel(path);
@@ -101,7 +102,8 @@ void App::CreateScene() {
             for (const auto& primitive : mesh.primitives) {
                 auto gltf_objects = LoadGltfObjects(
                     primitive, gltf_model, graphics_queue, command_pool, physical_device, device,
-                    scale, glm::vec3(translation[0], translation[1], translation[2]));
+                    scale, glm::vec3(translation[0], translation[1], translation[2]),
+                    glm::vec3(rotation[0], rotation[1], rotation[2]));
                 auto vertex_buffers = std::vector<VertexBuffer>();
                 vertex_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
                                             std::move(gltf_objects.vertices));

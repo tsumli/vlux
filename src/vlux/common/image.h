@@ -24,17 +24,6 @@ void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_
 
 class Image {
    public:
-    Image(const std::filesystem::path& path) {
-        auto pixels =
-            stbi_load(path.string().c_str(), &width_, &height_, &channels_, STBI_rgb_alpha);
-
-        if (!pixels) {
-            throw std::runtime_error("failed to load texture image!");
-        }
-        pixels_ = std::vector<uint8_t>(pixels, pixels + width_ * height_ * 4);
-        stbi_image_free(pixels);
-    }
-
     Image(const std::vector<uint8_t>& pixels, const int width, const int height, const int channels)
         : pixels_(pixels), width_(width), height_(height), channels_(channels) {
         assert(static_cast<size_t>(height_ * width_ * channels_) == pixels.size());
