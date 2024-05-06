@@ -49,9 +49,8 @@ std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
     }
     return tangents;
 }
-}  // namespace vlux::internal
+}  // namespace
 
-namespace vlux {
 GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf::Model& model,
                            const VkQueue graphics_queue, const VkCommandPool command_pool,
                            const VkPhysicalDevice physical_device, const VkDevice device,
