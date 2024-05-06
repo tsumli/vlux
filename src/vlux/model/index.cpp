@@ -2,7 +2,7 @@
 
 namespace vlux {
 IndexBuffer::IndexBuffer(const VkDevice device, const VkPhysicalDevice physical_device,
-                         const VkQueue graphics_queue, const VkCommandPool command_pool,
+                         const VkQueue queue, const VkCommandPool command_pool,
                          std::vector<Index>&& indices)
     : device_(device), indices_(std::move(indices)) {
     const auto buffer_size = static_cast<VkDeviceSize>(sizeof(Index) * indices_.size());
@@ -22,7 +22,7 @@ IndexBuffer::IndexBuffer(const VkDevice device, const VkPhysicalDevice physical_
                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer_, index_buffer_memory_, device_,
                  physical_device);
 
-    CopyBuffer(staging_buffer, index_buffer_, buffer_size, command_pool, graphics_queue, device_);
+    CopyBuffer(staging_buffer, index_buffer_, buffer_size, command_pool, queue, device_);
 
     vkDestroyBuffer(device, staging_buffer, nullptr);
     vkFreeMemory(device, staging_buffer_memory, nullptr);

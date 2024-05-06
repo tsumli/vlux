@@ -10,8 +10,7 @@ void CreateBuffer(const VkDeviceSize size, VkBufferUsageFlags usage,
                   const VkPhysicalDevice physical_device);
 
 void CopyBuffer(const VkBuffer src_buffer, const VkBuffer dst_buffer, const VkDeviceSize size,
-                const VkCommandPool command_pool, const VkQueue graphics_queue,
-                const VkDevice device);
+                const VkCommandPool command_pool, const VkQueue queue, const VkDevice device);
 }  // namespace vlux
 
 #endif
