@@ -38,24 +38,9 @@ make
 ```
 or you can just use VSCode to launch.
 
-## TODO
-- [x] Mouse control
-- [x] Compute shader
+## DONE
 - [x] Deferred rendering
-  - [x] Multi render targets 
-  - [x] Lighting (Blinn Phong)
+  - [x] Multi-render targets 
   - [x] CookTorranceBRDF
+  - [x] Compute shader
 - [x] Gamma correction
-- [x] Use config file
-- [ ] Cubemap
-- [ ] Multi-threading
-- [ ] Screen space ambient occlusion
-- [ ] Transparent pass
-- [ ] Reflection
-- [ ] Shadow
-- [ ] LOD
-- [ ] Displacement mapping
-- [ ] Raytracing
-- [ ] Mesh shader
-- [ ] SPIRV-reflect
-- [ ] Reconstruct world position from depth in compute shader
