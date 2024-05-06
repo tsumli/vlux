@@ -1,6 +1,7 @@
 #ifndef DRAW_RASTERIZE_H
 #define DRAW_RASTERIZE_H
 
+#include "common/image.h"
 #include "light.h"
 #include "pch.h"
 //
@@ -13,7 +14,6 @@
 #include "common/graphics_pipeline.h"
 #include "common/pipeline_layout.h"
 #include "common/render_pass.h"
-#include "common/render_target.h"
 #include "draw/draw_strategy.h"
 #include "scene/scene.h"
 #include "texture/texture_sampler.h"
@@ -42,7 +42,7 @@ class DrawRasterize final : public DrawStrategy {
                              const VkCommandBuffer command_buffer) override;
 
     void OnRecreateSwapChain(const DeviceResource& device_resource) override;
-    const RenderTarget& GetOutputRenderTarget() const override {
+    const ImageBuffer& GetOutputRenderTarget() const override {
         return render_targets_.at(RenderTargetType::kFinalized).value();
     }
 
@@ -89,8 +89,7 @@ class DrawRasterize final : public DrawStrategy {
         kFinalized,
         kCount
     };
-    std::unordered_map<RenderTargetType, std::optional<RenderTarget>> render_targets_;
-    std::unordered_map<RenderTargetType, std::optional<ImageBuffer>> render_targets__;
+    std::unordered_map<RenderTargetType, std::optional<ImageBuffer>> render_targets_;
 
     enum class TextureSamplerType { kColor, kNormal, kEmissive, kMetallicRoughness, kCount };
     std::unordered_map<TextureSamplerType, std::optional<TextureSampler>> texture_samplers_;

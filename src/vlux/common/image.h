@@ -30,6 +30,7 @@ class ImageBuffer {
 
     VkImage GetVkImage() const { return image_; }
     VkImageView GetVkImageView() const { return image_view_; }
+    VkFormat GetVkFormat() const { return format_; }
 
    private:
     VkDevice device_;
@@ -37,6 +38,7 @@ class ImageBuffer {
     uint32_t width_;
     uint32_t height_;
 
+    VkFormat format_;
     VkImage image_;
     VkDeviceMemory image_memory_;
     VkImageView image_view_;
