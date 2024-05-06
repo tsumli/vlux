@@ -24,6 +24,8 @@ set(LIB_SRC
     vlux/common/render_pass.cpp
     vlux/common/render_target.cpp
     vlux/common/utils.cpp
+    # ./cubemap
+    vlux/cubemap/cubemap.cpp
     # ./device_resource
     vlux/device_resource/barrier.cpp
     vlux/device_resource/debug_messenger.cpp
@@ -53,7 +55,7 @@ set(LIB_SRC
     vlux/texture/texture_sampler.cpp
     # ./utils
     vlux/utils/debug.h
-    vlux/utils/io.h
+    vlux/utils/io.cpp
     vlux/utils/path.h
     vlux/utils/string.h
     vlux/utils/timer.h

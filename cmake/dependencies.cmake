@@ -39,17 +39,18 @@ target_link_libraries(${LIB_NAME} PUBLIC tinygltf)
 target_compile_definitions(${LIB_NAME} PUBLIC "TINYGLTF_USE_CPP14")
 target_compile_options(tinygltf PRIVATE -Wno-missing-field-initializers)
 
-# # std  # loaded in tinygltf
-# message(STATUS "Setup stb")
-# FetchContent_Declare(
-#   stb
-#   GIT_REPOSITORY https://github.com/nothings/stb.git
-#   GIT_TAG f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe
-#   SOURCE_DIR ${BUILD_LIB_DIR}/stb
-# )
-# FetchContent_MakeAvailable(stb)
-# set(STB_INCLUDE ${BUILD_LIB_DIR}/stb)
-# target_include_directories(${LIB_NAME} PUBLIC ${STB_INCLUDE})
+# tiny exr
+message(STATUS "Setup tinyexr")
+FetchContent_Declare(
+  tinyexr
+  GIT_REPOSITORY https://github.com/syoyo/tinyexr.git
+  GIT_TAG 6b8b66f9caf887f8d05e0b7a7e48e0343a5b3d62
+  SOURCE_DIR ${BUILD_LIB_DIR}/tinyexr
+)
+FetchContent_MakeAvailable(tinyexr)
+set(TINYEXR_INCLUDE ${BUILD_LIB_DIR}/tinyexr)
+target_include_directories(${LIB_NAME} PUBLIC ${TINYEXR_INCLUDE})
+target_link_libraries(${LIB_NAME} PUBLIC tinyexr)
 
 # spdlog
 message(STATUS "Setup spdlog")
@@ -101,3 +102,8 @@ FetchContent_Declare(
   SOURCE_DIR ${ASSET_DIR}/gltf-samples
 )
 FetchContent_MakeAvailable(gltf-samples)
+
+# cubemaps
+message(STATUS "Assets: gum trees")
+file(DOWNLOAD https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/4k/gum_trees_4k.exr ${ASSET_DIR}/cubemap/gum_trees_4k.exr)
+  

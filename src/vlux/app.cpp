@@ -27,7 +27,8 @@ App::App(DeviceResource& device_resource)
                   device_resource_.GetVkPhysicalDevice()),
       light_ubo_(device_resource_.GetDevice().GetVkDevice(),
                  device_resource_.GetVkPhysicalDevice()),
-      config_(ReadJsonFile(GetCurrentDir() / "config.json")) {
+      config_(ReadJsonFile(GetCurrentDir() / "config.json")),
+      scene_name_("Sponza") {
     const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto physical_device = device_resource_.GetVkPhysicalDevice();
 
@@ -88,7 +89,8 @@ void App::CreateScene() {
     const auto graphics_queue = device_resource_.GetGraphicsQueue();
 
     auto models = std::vector<Model>();
-    for (const auto& model_config : config_.at("models")) {
+    const auto scene_config = config_.at("scenes").at(scene_name_);
+    for (const auto& model_config : scene_config.at("models")) {
         // unpack config
         const auto name = model_config.at("name").get<std::string>();
         const auto path = model_config.at("path").get<std::filesystem::path>();
@@ -100,6 +102,7 @@ void App::CreateScene() {
         const auto gltf_model = LoadTinyGltfModel(path);
         for (const auto& mesh : gltf_model.meshes) {
             for (const auto& primitive : mesh.primitives) {
+                // gltf objects
                 auto gltf_objects = LoadGltfObjects(
                     primitive, gltf_model, graphics_queue, command_pool, physical_device, device,
                     scale, glm::vec3(translation[0], translation[1], translation[2]),
@@ -107,9 +110,12 @@ void App::CreateScene() {
                 auto vertex_buffers = std::vector<VertexBuffer>();
                 vertex_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
                                             std::move(gltf_objects.vertices));
+                // index
                 auto index_buffers = std::vector<IndexBuffer>();
                 index_buffers.emplace_back(device, physical_device, graphics_queue, command_pool,
                                            std::move(gltf_objects.indices));
+
+                // create model
                 auto model = Model(
                     device, physical_device, std::move(vertex_buffers), std::move(index_buffers),
                     std::move(gltf_objects.base_color_factor), gltf_objects.metallic_factor,
@@ -121,7 +127,9 @@ void App::CreateScene() {
             }
         }
     }
-    scene_.emplace(std::move(models));
+    const auto cubemap_path = scene_config.at("cubemap").get<std::filesystem::path>();
+    auto cubemap = CubeMap(cubemap_path);
+    scene_.emplace(std::move(models), std::move(cubemap));
 }
 
 void App::MainLoop() {

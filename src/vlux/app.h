@@ -64,6 +64,7 @@ class App {
 
     // config
     const nlohmann::json config_;
+    std::string scene_name_;
 };
 }  // namespace vlux
 

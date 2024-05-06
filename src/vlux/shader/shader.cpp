@@ -35,7 +35,7 @@ Shader::Shader(const std::filesystem::path& filename, const VkShaderStageFlagBit
                                  .parent_path() /
                              "processed" / "spv";  // TODO: shader root
 
-    code_ = read_file(shader_root / filename);
+    code_ = ReadFile(shader_root / filename);
     shader_module_ = CreateShaderModule(device, code_);
     stage_info_ = VkPipelineShaderStageCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

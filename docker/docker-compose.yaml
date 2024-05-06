@@ -2,8 +2,13 @@ services:
   base: &default
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+      - TERM=xterm-256color
+      - QT_X11_NO_MITSHM=1
+      - DISPLAY=${DISPLAY}
+      - XAUTHORITY=/tmp/.docker.xauth
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
       - ../:/work/
     image: vulkan-rendering:latest
     deploy:
@@ -12,7 +17,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [ gpu ]
+              capabilities: [gpu]
     shm_size: 48gb
     working_dir: /work/
     user: "1000:1000"

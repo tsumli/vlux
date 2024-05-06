@@ -3,6 +3,7 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <cstdint>
 #include <limits>
 
 #include "pch.h"
@@ -22,9 +23,14 @@ void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_
                        const uint32_t height, const VkQueue graphics_queue,
                        const VkCommandPool command_pool, const VkDevice device);
 
+// concept for uint8_t or float
+template <typename T>
+concept PixelType = std::is_same_v<T, uint8_t> || std::is_same_v<T, float>;
+
+template <PixelType T>
 class Image {
    public:
-    Image(const std::vector<uint8_t>& pixels, const int width, const int height, const int channels)
+    Image(const std::vector<T>& pixels, const int width, const int height, const int channels)
         : pixels_(pixels), width_(width), height_(height), channels_(channels) {
         assert(static_cast<size_t>(height_ * width_ * channels_) == pixels.size());
     }
@@ -34,10 +40,10 @@ class Image {
     int GetWidth() const { return width_; }
     int GetHeight() const { return height_; }
     VkDeviceSize GetSize() const { return width_ * height_ * 4; }
-    const uint8_t* GetPixels() const { return pixels_.data(); }
+    const T* GetPixels() const { return pixels_.data(); }
 
    private:
-    std::vector<uint8_t> pixels_;
+    std::vector<T> pixels_;
     int width_;
     int height_;
     int channels_;
