@@ -139,7 +139,6 @@ void App::CreateScene() {
         return CubeMap(cubemap_path);
     }();
     spdlog::debug("scene load time: {} ms", timer_.ElapsedMilliseconds());
-    std::terminate();
     scene_.emplace(std::move(models), std::move(cubemap));
 }
 
