@@ -2,6 +2,9 @@
 #define VERTEX_H
 #include "pch.h"
 
+//
+#include "common/buffer.h"
+
 namespace vlux {
 struct Vertex {
     glm::vec3 pos;
@@ -54,23 +57,16 @@ class VertexBuffer {
     VertexBuffer(const VkDevice device, const VkPhysicalDevice physical_device,
                  const VkQueue graphics_queue, const VkCommandPool command_pool,
                  std::vector<Vertex>&& vertices);
-    ~VertexBuffer();
+    ~VertexBuffer() = default;
     VertexBuffer(const VertexBuffer&) = delete;
     VertexBuffer& operator=(const VertexBuffer&) = delete;
     VertexBuffer(VertexBuffer&&) = default;
     VertexBuffer& operator=(VertexBuffer&&) = default;
-    VkBuffer GetVertexBuffer() const {
-        if (vertex_buffer_ == VK_NULL_HANDLE) {
-            throw std::runtime_error("`VertexBuffer::vertex_buffer` is `VK_NULL_HANDLE`");
-        }
-        return vertex_buffer_;
-    }
+    VkBuffer GetVkBuffer() const { return buffer_->GetVkBuffer(); }
 
    private:
     VkDevice device_;
-    std::vector<Vertex> vertices_;
-    VkBuffer vertex_buffer_ = VK_NULL_HANDLE;
-    VkDeviceMemory vertex_buffer_memory_ = VK_NULL_HANDLE;
+    std::optional<Buffer> buffer_;
 };
 
 }  // namespace vlux

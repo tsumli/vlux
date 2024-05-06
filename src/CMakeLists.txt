@@ -22,12 +22,10 @@ set(LIB_SRC
     vlux/common/pipeline_layout.cpp
     vlux/common/queue.cpp
     vlux/common/render_pass.cpp
-    vlux/common/render_target.cpp
     vlux/common/utils.cpp
     # ./cubemap
     vlux/cubemap/cubemap.cpp
     # ./device_resource
-    vlux/device_resource/barrier.cpp
     vlux/device_resource/debug_messenger.cpp
     vlux/device_resource/device.cpp
     vlux/device_resource/device_resource.cpp

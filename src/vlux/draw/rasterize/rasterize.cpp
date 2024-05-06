@@ -29,144 +29,73 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
     spdlog::debug("setup render targets");
     // Color
-    [&]() {
-        render_targets_[RenderTargetType::kColor].emplace(device);
-        auto& color = render_targets_.at(RenderTargetType::kColor).value();
-        color.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
-        CreateImage(width, height, color.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color.GetVkImageRef(),
-                    color.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(color.GetVkImageRef(), color.GetVkFormat(), 0,
-                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
-        color.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kColor].emplace(
+        device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Normal
-    [&]() {
-        render_targets_[RenderTargetType::kNormal].emplace(device);
-        auto& normal = render_targets_.at(RenderTargetType::kNormal).value();
-        normal.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
-        CreateImage(width, height, normal.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, normal.GetVkImageRef(),
-                    normal.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(normal.GetVkImageRef(), normal.GetVkFormat(), 0,
-                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
-        normal.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kNormal].emplace(
+        device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Depth Stencil
-    [&]() {
-        render_targets_[RenderTargetType::kDepthStencil].emplace(device);
-        auto& depth_stencil = render_targets_.at(RenderTargetType::kDepthStencil).value();
-        depth_stencil.SetFormat(VK_FORMAT_D32_SFLOAT);
-        CreateImage(width, height, depth_stencil.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_stencil.GetVkImageRef(),
-                    depth_stencil.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view =
-            CreateImageView(depth_stencil.GetVkImageRef(), depth_stencil.GetVkFormat(), 0,
-                            VK_IMAGE_ASPECT_DEPTH_BIT, device);
-        depth_stencil.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kDepthStencil].emplace(
+        device, physical_device, width, height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     // Position
-    [&]() {
-        render_targets_[RenderTargetType::kPosition].emplace(device);
-        auto& position = render_targets_.at(RenderTargetType::kPosition).value();
-        position.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
-        CreateImage(width, height, position.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, position.GetVkImageRef(),
-                    position.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(position.GetVkImageRef(), position.GetVkFormat(), 0,
-                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
-        position.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kPosition].emplace(
+        device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Emissive
-    [&]() {
-        render_targets_[RenderTargetType::kEmissive].emplace(device);
-        auto& emissive = render_targets_.at(RenderTargetType::kEmissive).value();
-        emissive.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
-        CreateImage(width, height, emissive.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, emissive.GetVkImageRef(),
-                    emissive.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(emissive.GetVkImageRef(), emissive.GetVkFormat(), 0,
-                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
-        emissive.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kEmissive].emplace(
+        device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // BaseColorFactor
-    [&]() {
-        render_targets_[RenderTargetType::kBaseColorFactor].emplace(device);
-        auto& base_color_factor = render_targets_.at(RenderTargetType::kBaseColorFactor).value();
-        base_color_factor.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
-        CreateImage(width, height, base_color_factor.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, base_color_factor.GetVkImageRef(),
-                    base_color_factor.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view =
-            CreateImageView(base_color_factor.GetVkImageRef(), base_color_factor.GetVkFormat(), 0,
-                            VK_IMAGE_ASPECT_COLOR_BIT, device);
-        base_color_factor.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kBaseColorFactor].emplace(
+        device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // MetallicRoughnessFactor
-    [&]() {
-        render_targets_[RenderTargetType::kMetallicRoughnessFactor].emplace(device);
-        auto& metallic_roughtness_factor =
-            render_targets_.at(RenderTargetType::kMetallicRoughnessFactor).value();
-        metallic_roughtness_factor.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
-        CreateImage(width, height, metallic_roughtness_factor.GetVkFormat(),
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, metallic_roughtness_factor.GetVkImageRef(),
-                    metallic_roughtness_factor.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(metallic_roughtness_factor.GetVkImageRef(),
-                                                metallic_roughtness_factor.GetVkFormat(), 0,
-                                                VK_IMAGE_ASPECT_COLOR_BIT, device);
-        metallic_roughtness_factor.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kMetallicRoughnessFactor].emplace(
+        device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // MetallicRoughness
-    [&]() {
-        render_targets_[RenderTargetType::kMetallicRoughness].emplace(device);
-        auto& metallic_roughness = render_targets_.at(RenderTargetType::kMetallicRoughness).value();
-        metallic_roughness.SetFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
-        CreateImage(width, height, metallic_roughness.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, metallic_roughness.GetVkImageRef(),
-                    metallic_roughness.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view =
-            CreateImageView(metallic_roughness.GetVkImageRef(), metallic_roughness.GetVkFormat(), 0,
-                            VK_IMAGE_ASPECT_COLOR_BIT, device);
-        metallic_roughness.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kMetallicRoughness].emplace(
+        device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Finalized
-    [&]() {
-        render_targets_[RenderTargetType::kFinalized].emplace(device);
-        auto& finalized = render_targets_.at(RenderTargetType::kFinalized).value();
-        finalized.SetFormat(VK_FORMAT_B8G8R8A8_UNORM);
-        CreateImage(width, height, finalized.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, finalized.GetVkImageRef(),
-                    finalized.GetVkDeviceMemoryRef(), device, physical_device);
-        const auto image_view = CreateImageView(finalized.GetVkImageRef(), finalized.GetVkFormat(),
-                                                0, VK_IMAGE_ASPECT_COLOR_BIT, device);
-        finalized.SetImageView(image_view);
-    }();
+    render_targets_[RenderTargetType::kFinalized].emplace(
+        device, physical_device, width, height, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // texture sampler
     spdlog::debug("setup texture samplers");
@@ -694,7 +623,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 auto descriptor_write = std::vector<VkWriteDescriptorSet>();
                 // transform
                 const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
-                    .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
+                    .buffer = transform_ubo.GetVkBufferUniform(frame_i),
                     .offset = 0,
                     .range = transform_ubo.GetUniformBufferObjectSize(),
                 };
@@ -788,7 +717,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
                 // material
                 const auto material_ubo_buffer_info = VkDescriptorBufferInfo{
-                    .buffer = model.GetMaterialUbo().GetVkUniformBuffer(frame_i),
+                    .buffer = model.GetMaterialUbo().GetVkBufferUniform(frame_i),
                     .offset = 0,
                     .range = model.GetMaterialUbo().GetUniformBufferObjectSize(),
                 };
@@ -1072,12 +1001,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         // update descriptor sets
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
             const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
-                .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
+                .buffer = transform_ubo.GetVkBufferUniform(frame_i),
                 .offset = 0,
                 .range = transform_ubo.GetUniformBufferObjectSize(),
             };
             const auto camera_ubo_buffer_info = VkDescriptorBufferInfo{
-                .buffer = camera_ubo.GetVkUniformBuffer(frame_i),
+                .buffer = camera_ubo.GetVkBufferUniform(frame_i),
                 .offset = 0,
                 .range = camera_ubo.GetUniformBufferObjectSize(),
             };
@@ -1121,7 +1050,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
             const auto light_ubo_buffer_info = VkDescriptorBufferInfo{
-                .buffer = light_ubo.GetVkUniformBuffer(frame_i),
+                .buffer = light_ubo.GetVkBufferUniform(frame_i),
                 .offset = 0,
                 .range = light_ubo.GetUniformBufferObjectSize(),
             };
@@ -1336,10 +1265,10 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
 
     for (auto model_i = 0; const auto& model : scene_.GetModels()) {
         const auto vertex_buffers =
-            std::vector<VkBuffer>{model.GetVertexBuffers()[0].GetVertexBuffer()};
+            std::vector<VkBuffer>{model.GetVertexBuffers()[0].GetVkBuffer()};
         const auto offsets = std::vector<VkDeviceSize>{0};
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.data(), offsets.data());
-        vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetIndexBuffer(), 0,
+        vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetVkBuffer(), 0,
                              VK_INDEX_TYPE_UINT16);
         const auto descriptor_set = std::to_array({
             graphics_descriptor_sets_.at(image_idx).GetVkDescriptorSet(model_i),

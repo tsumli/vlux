@@ -19,9 +19,30 @@ VkImageView CreateImageView(const VkImage image, const VkFormat format,
                             const VkImageViewCreateFlags create_flags,
                             VkImageAspectFlags aspect_flags, const VkDevice device);
 
-void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_t width,
-                       const uint32_t height, const VkQueue graphics_queue,
-                       const VkCommandPool command_pool, const VkDevice device);
+class ImageBuffer {
+   public:
+    ImageBuffer(const VkDevice device, const VkPhysicalDevice physical_device, const uint32_t width,
+                const uint32_t height, const VkFormat format, const VkImageTiling tiling,
+                const VkImageUsageFlags usage, const VkMemoryPropertyFlags properties,
+                const VkImageViewCreateFlags create_flags, VkImageAspectFlags aspect_flags);
+
+    ~ImageBuffer();
+
+    VkImage GetVkImage() const { return image_; }
+    VkImageView GetVkImageView() const { return image_view_; }
+    VkFormat GetVkFormat() const { return format_; }
+
+   private:
+    VkDevice device_;
+    VkPhysicalDevice physical_device_;
+    uint32_t width_;
+    uint32_t height_;
+
+    VkFormat format_;
+    VkImage image_;
+    VkDeviceMemory image_memory_;
+    VkImageView image_view_;
+};
 
 // concept for uint8_t or float
 template <typename T>

@@ -1,16 +1,20 @@
 #include "image.h"
 
-#include <vulkan/vulkan_core.h>
-
+#include "common/command_buffer.h"
 #include "common/utils.h"
-#include "device_resource/barrier.h"
 
 namespace vlux {
-void CreateImage(const uint32_t width, const uint32_t height, VkFormat format,
-                 const VkImageTiling tiling, const VkImageUsageFlags usage,
-                 const VkMemoryPropertyFlags properties, VkImage& image,
-                 VkDeviceMemory& image_memory, const VkDevice device,
-                 const VkPhysicalDevice physical_device) {
+ImageBuffer::ImageBuffer(const VkDevice device, const VkPhysicalDevice physical_device,
+                         const uint32_t width, const uint32_t height, const VkFormat format,
+                         const VkImageTiling tiling, const VkImageUsageFlags usage,
+                         const VkMemoryPropertyFlags properties,
+                         const VkImageViewCreateFlags create_flags, VkImageAspectFlags aspect_flags)
+    : device_(device),
+      physical_device_(physical_device),
+      width_(width),
+      height_(height),
+      format_(format) {
+    // create image
     const auto image_info = VkImageCreateInfo{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
@@ -25,34 +29,31 @@ void CreateImage(const uint32_t width, const uint32_t height, VkFormat format,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
-    if (vkCreateImage(device, &image_info, nullptr, &image) != VK_SUCCESS) {
+    if (vkCreateImage(device, &image_info, nullptr, &image_) != VK_SUCCESS) {
         throw std::runtime_error("failed to create image!");
     }
 
     VkMemoryRequirements mem_requirements;
-    vkGetImageMemoryRequirements(device, image, &mem_requirements);
+    vkGetImageMemoryRequirements(device, image_, &mem_requirements);
 
     VkMemoryAllocateInfo allocInfo{
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .allocationSize = mem_requirements.size,
         .memoryTypeIndex =
-            FindMemoryType(mem_requirements.memoryTypeBits, properties, physical_device),
+            FindMemoryType(mem_requirements.memoryTypeBits, properties, physical_device_),
     };
 
-    if (vkAllocateMemory(device, &allocInfo, nullptr, &image_memory) != VK_SUCCESS) {
+    if (vkAllocateMemory(device, &allocInfo, nullptr, &image_memory_) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate image memory!");
     }
 
-    vkBindImageMemory(device, image, image_memory, 0);
-}
+    vkBindImageMemory(device, image_, image_memory_, 0);
 
-VkImageView CreateImageView(const VkImage image, const VkFormat format,
-                            const VkImageViewCreateFlags create_flags,
-                            VkImageAspectFlags aspect_flags, const VkDevice device) {
+    // create image view
     const auto view_info = VkImageViewCreateInfo{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .flags = create_flags,
-        .image = image,
+        .image = image_,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = format,
         .subresourceRange =
@@ -66,33 +67,15 @@ VkImageView CreateImageView(const VkImage image, const VkFormat format,
 
     };
 
-    VkImageView image_view;
-    if (vkCreateImageView(device, &view_info, nullptr, &image_view) != VK_SUCCESS) {
+    if (vkCreateImageView(device, &view_info, nullptr, &image_view_) != VK_SUCCESS) {
         throw std::runtime_error("failed to create image view!");
     }
-
-    return image_view;
 }
-void CopyBufferToImage(const VkBuffer buffer, const VkImage image, const uint32_t width,
-                       const uint32_t height, const VkQueue graphics_queue,
-                       const VkCommandPool command_pool, const VkDevice device) {
-    const auto command_buffer = BeginSingleTimeCommands(command_pool, device);
 
-    const auto region = VkBufferImageCopy{
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource{
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel = 0,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        },
-        .imageOffset = {0, 0, 0},
-        .imageExtent = {width, height, 1},
-    };
-    vkCmdCopyBufferToImage(command_buffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                           &region);
-    EndSingleTimeCommands(command_buffer, graphics_queue, command_pool, device);
+ImageBuffer::~ImageBuffer() {
+    vkDestroyImageView(device_, image_view_, nullptr);
+    vkDestroyImage(device_, image_, nullptr);
+    vkFreeMemory(device_, image_memory_, nullptr);
 }
+
 }  // namespace vlux
