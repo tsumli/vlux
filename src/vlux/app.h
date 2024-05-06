@@ -14,6 +14,7 @@
 #include "scene/scene.h"
 #include "transform.h"
 #include "uniform_buffer.h"
+#include "utils/timer.h"
 
 namespace vlux {
 
@@ -61,6 +62,7 @@ class App {
 
     // frame timer
     FrameTimer frame_timer_;
+    Timer timer_;
 
     // config
     const nlohmann::json config_;

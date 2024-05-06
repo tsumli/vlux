@@ -37,8 +37,7 @@ void CreateBuffer(const VkDeviceSize size, VkBufferUsageFlags usage,
 }
 
 void CopyBuffer(const VkBuffer src_buffer, const VkBuffer dst_buffer, const VkDeviceSize size,
-                const VkCommandPool command_pool, const VkQueue graphics_queue,
-                const VkDevice device) {
+                const VkCommandPool command_pool, const VkQueue queue, const VkDevice device) {
     const auto alloc_info = VkCommandBufferAllocateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = command_pool,
@@ -52,7 +51,6 @@ void CopyBuffer(const VkBuffer src_buffer, const VkBuffer dst_buffer, const VkDe
     const auto begin_info = VkCommandBufferBeginInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-
     };
 
     vkBeginCommandBuffer(command_buffer, &begin_info);
@@ -70,8 +68,8 @@ void CopyBuffer(const VkBuffer src_buffer, const VkBuffer dst_buffer, const VkDe
         .pCommandBuffers = &command_buffer,
     };
 
-    vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-    vkQueueWaitIdle(graphics_queue);
+    vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queue);
 
     vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
 }

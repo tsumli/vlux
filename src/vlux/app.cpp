@@ -7,6 +7,7 @@
 #include "common/command_buffer.h"
 #include "common/queue.h"
 #include "control.h"
+#include "cubemap/cubemap.h"
 #include "device_resource/device.h"
 #include "draw/rasterize/rasterize.h"
 #include "gui.h"
@@ -90,6 +91,8 @@ void App::CreateScene() {
 
     auto models = std::vector<Model>();
     const auto scene_config = config_.at("scenes").at(scene_name_);
+    spdlog::debug("load scene: {}", scene_name_);
+    timer_.Reset();
     for (const auto& model_config : scene_config.at("models")) {
         // unpack config
         const auto name = model_config.at("name").get<std::string>();
@@ -127,8 +130,15 @@ void App::CreateScene() {
             }
         }
     }
-    const auto cubemap_path = scene_config.at("cubemap").get<std::filesystem::path>();
-    auto cubemap = CubeMap(cubemap_path);
+    const auto cubemap_path = scene_config.value("cubemap", std::filesystem::path{});
+    auto cubemap = [&]() -> std::optional<CubeMap> {
+        if (cubemap_path.empty()) {
+            return std::nullopt;
+        }
+        spdlog::debug("load cubemap: {}", cubemap_path.string());
+        return CubeMap(cubemap_path);
+    }();
+    spdlog::debug("scene load time: {} ms", timer_.ElapsedMilliseconds());
     scene_.emplace(std::move(models), std::move(cubemap));
 }
 

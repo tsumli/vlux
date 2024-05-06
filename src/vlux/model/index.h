@@ -10,9 +10,8 @@ using Index = uint16_t;
 
 class IndexBuffer {
    public:
-    IndexBuffer(const VkDevice device, const VkPhysicalDevice physical_device,
-                const VkQueue graphics_queue, const VkCommandPool command_pool,
-                std::vector<Index>&& indices);
+    IndexBuffer(const VkDevice device, const VkPhysicalDevice physical_device, const VkQueue queue,
+                const VkCommandPool command_pool, std::vector<Index>&& indices);
     ~IndexBuffer();
 
     VkBuffer GetIndexBuffer() const { return index_buffer_; }

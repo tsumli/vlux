@@ -63,8 +63,8 @@
                         180.0
                     ]
                 }
-            ],
-            "cubemap": "assets/cubemap/gum_trees_4k.exr"
+            ]
+            // "cubemap": "assets/cubemap/gum_trees_4k.exr"
         }
     }
 }
