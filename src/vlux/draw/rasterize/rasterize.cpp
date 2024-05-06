@@ -41,6 +41,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         const auto image_view = CreateImageView(color.GetVkImageRef(), color.GetVkFormat(), 0,
                                                 VK_IMAGE_ASPECT_COLOR_BIT, device);
         color.SetImageView(image_view);
+
+        render_targets__[RenderTargetType::kColor].emplace(
+            device, physical_device, width, height, color.GetVkFormat(), VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
     }();
 
     // Normal
@@ -694,7 +700,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 auto descriptor_write = std::vector<VkWriteDescriptorSet>();
                 // transform
                 const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
-                    .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
+                    .buffer = transform_ubo.GetVkBufferUniform(frame_i),
                     .offset = 0,
                     .range = transform_ubo.GetUniformBufferObjectSize(),
                 };
@@ -788,7 +794,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
 
                 // material
                 const auto material_ubo_buffer_info = VkDescriptorBufferInfo{
-                    .buffer = model.GetMaterialUbo().GetVkUniformBuffer(frame_i),
+                    .buffer = model.GetMaterialUbo().GetVkBufferUniform(frame_i),
                     .offset = 0,
                     .range = model.GetMaterialUbo().GetUniformBufferObjectSize(),
                 };
@@ -1072,12 +1078,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
         // update descriptor sets
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
             const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
-                .buffer = transform_ubo.GetVkUniformBuffer(frame_i),
+                .buffer = transform_ubo.GetVkBufferUniform(frame_i),
                 .offset = 0,
                 .range = transform_ubo.GetUniformBufferObjectSize(),
             };
             const auto camera_ubo_buffer_info = VkDescriptorBufferInfo{
-                .buffer = camera_ubo.GetVkUniformBuffer(frame_i),
+                .buffer = camera_ubo.GetVkBufferUniform(frame_i),
                 .offset = 0,
                 .range = camera_ubo.GetUniformBufferObjectSize(),
             };
@@ -1121,7 +1127,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
             const auto light_ubo_buffer_info = VkDescriptorBufferInfo{
-                .buffer = light_ubo.GetVkUniformBuffer(frame_i),
+                .buffer = light_ubo.GetVkBufferUniform(frame_i),
                 .offset = 0,
                 .range = light_ubo.GetUniformBufferObjectSize(),
             };
@@ -1336,10 +1342,10 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
 
     for (auto model_i = 0; const auto& model : scene_.GetModels()) {
         const auto vertex_buffers =
-            std::vector<VkBuffer>{model.GetVertexBuffers()[0].GetVertexBuffer()};
+            std::vector<VkBuffer>{model.GetVertexBuffers()[0].GetVkBuffer()};
         const auto offsets = std::vector<VkDeviceSize>{0};
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.data(), offsets.data());
-        vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetIndexBuffer(), 0,
+        vkCmdBindIndexBuffer(command_buffer, model.GetIndexBuffers()[0].GetVkBuffer(), 0,
                              VK_INDEX_TYPE_UINT16);
         const auto descriptor_set = std::to_array({
             graphics_descriptor_sets_.at(image_idx).GetVkDescriptorSet(model_i),

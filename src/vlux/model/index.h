@@ -12,16 +12,16 @@ class IndexBuffer {
    public:
     IndexBuffer(const VkDevice device, const VkPhysicalDevice physical_device, const VkQueue queue,
                 const VkCommandPool command_pool, std::vector<Index>&& indices);
-    ~IndexBuffer();
+    ~IndexBuffer() = default;
 
-    VkBuffer GetIndexBuffer() const { return index_buffer_; }
-    size_t GetSize() const { return indices_.size(); }
+    VkBuffer GetVkBuffer() const { return buffer_->GetVkBuffer(); }
+    size_t GetSize() const { return index_count_; }
 
    private:
     const VkDevice device_;
-    const std::vector<Index> indices_;
-    VkBuffer index_buffer_ = VK_NULL_HANDLE;
-    VkDeviceMemory index_buffer_memory_ = VK_NULL_HANDLE;
+    const size_t index_count_;
+
+    std::optional<Buffer> buffer_;
 };
 }  // namespace vlux
 

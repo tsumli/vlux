@@ -27,7 +27,6 @@ set(LIB_SRC
     # ./cubemap
     vlux/cubemap/cubemap.cpp
     # ./device_resource
-    vlux/device_resource/barrier.cpp
     vlux/device_resource/debug_messenger.cpp
     vlux/device_resource/device.cpp
     vlux/device_resource/device_resource.cpp
