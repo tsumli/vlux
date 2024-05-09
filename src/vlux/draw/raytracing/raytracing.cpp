@@ -382,6 +382,8 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
             },
     };
 
+    const auto num_models = scene_.GetModels().size();
+    bottom_level_as_.reserve(num_models);
     for (const auto& model : scene_.GetModels()) {
         const auto& vertices = model.GetVertexBuffers().at(0).GetVertices();
         const auto& indices = model.GetIndexBuffers().at(0).GetIndices();
@@ -471,16 +473,17 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
             &acceleration_structure_build_sizes_info);
 
         // Create acceleration structure
-        bottom_level_as_.emplace(device, physical_device, acceleration_structure_build_sizes_info);
+        bottom_level_as_.emplace_back(device, physical_device,
+                                      acceleration_structure_build_sizes_info);
 
         const auto acceleration_structure_createInfo = VkAccelerationStructureCreateInfoKHR{
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-            .buffer = bottom_level_as_->GetBuffer(),
+            .buffer = bottom_level_as_.back().GetBuffer(),
             .size = acceleration_structure_build_sizes_info.accelerationStructureSize,
             .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
         };
         vkCreateAccelerationStructureKHR(device, &acceleration_structure_createInfo, nullptr,
-                                         &bottom_level_as_->MutableHandle());
+                                         &bottom_level_as_.back().MutableHandle());
 
         // Create a small scratch buffer used during build of the bottom level acceleration
         // structure
@@ -492,7 +495,7 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
             .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
             .flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
             .mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
-            .dstAccelerationStructure = bottom_level_as_->GetHandle(),
+            .dstAccelerationStructure = bottom_level_as_.back().GetHandle(),
             .geometryCount = static_cast<uint32_t>(geometries.size()),
             .pGeometries = geometries.data(),
             .scratchData =
@@ -516,9 +519,9 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
 
         const auto acceleration_device_address_info = VkAccelerationStructureDeviceAddressInfoKHR{
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-            .accelerationStructure = bottom_level_as_->GetHandle(),
+            .accelerationStructure = bottom_level_as_.back().GetHandle(),
         };
-        bottom_level_as_->SetDeviceAddress(
+        bottom_level_as_.back().SetDeviceAddress(
             vkGetAccelerationStructureDeviceAddressKHR(device, &acceleration_device_address_info));
     }
 }
@@ -534,27 +537,28 @@ void DrawRaytracing::CreateTopLevelAS(const VkDevice device, const VkPhysicalDev
             },
     };
 
-    auto instance = VkAccelerationStructureInstanceKHR{
-        .transform = transform_matrix,
-        .instanceCustomIndex = 0,
-        .mask = 0xFF,
-        .instanceShaderBindingTableRecordOffset = 0,
-        .flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR,
-        .accelerationStructureReference = bottom_level_as_->GetDeviceAddress(),
-    };
-
+    auto instances = std::vector<VkAccelerationStructureInstanceKHR>();
+    instances.reserve(bottom_level_as_.size());
+    for (const auto& blas : bottom_level_as_) {
+        instances.emplace_back(VkAccelerationStructureInstanceKHR{
+            .transform = transform_matrix,
+            .instanceCustomIndex = 0,
+            .mask = 0xFF,
+            .instanceShaderBindingTableRecordOffset = 0,
+            .flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR,
+            .accelerationStructureReference = blas.GetDeviceAddress(),
+        });
+    }
     // Buffer for instance data
     const auto instance_buffer =
         Buffer(device, physical_device,
                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-               sizeof(VkAccelerationStructureInstanceKHR), &instance);
-
+               sizeof(VkAccelerationStructureInstanceKHR) * instances.size(), instances.data());
     const auto instance_data_device_address = VkDeviceOrHostAddressConstKHR{
         .deviceAddress = GetBufferDeviceAddress(device, instance_buffer.GetVkBuffer()),
     };
-
     const auto acceleration_structure_geometry = std::to_array({
         VkAccelerationStructureGeometryKHR{
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
@@ -573,14 +577,6 @@ void DrawRaytracing::CreateTopLevelAS(const VkDevice device, const VkPhysicalDev
         },
     });
 
-    // Get size info
-    /*
-    The pSrcAccelerationStructure, dstAccelerationStructure, and mode members of pBuildInfo are
-    ignored. Any VkDeviceOrHostAddressKHR members of pBuildInfo are ignored by this command,
-    except that the hostAddress member of
-    VkAccelerationStructureGeometryTrianglesDataKHR::transformData will be examined to check if
-    it is NULL.*
-    */
     const auto acceleration_structure_build_geometry_info =
         VkAccelerationStructureBuildGeometryInfoKHR{
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
@@ -590,8 +586,7 @@ void DrawRaytracing::CreateTopLevelAS(const VkDevice device, const VkPhysicalDev
             .pGeometries = acceleration_structure_geometry.data(),
         };
 
-    const auto primitive_count = static_cast<uint32_t>(1);
-
+    const auto primitive_count = static_cast<uint32_t>(bottom_level_as_.size());
     auto acceleration_structure_build_sizes_info = VkAccelerationStructureBuildSizesInfoKHR{
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,
     };
@@ -601,14 +596,13 @@ void DrawRaytracing::CreateTopLevelAS(const VkDevice device, const VkPhysicalDev
                                             &acceleration_structure_build_sizes_info);
     top_level_as_.emplace(device, physical_device, acceleration_structure_build_sizes_info);
 
-    const auto accelerationStructureCreateInfo = VkAccelerationStructureCreateInfoKHR{
+    const auto acceleration_structure_create_info = VkAccelerationStructureCreateInfoKHR{
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
         .buffer = top_level_as_->GetBuffer(),
         .size = acceleration_structure_build_sizes_info.accelerationStructureSize,
         .type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
     };
-
-    vkCreateAccelerationStructureKHR(device, &accelerationStructureCreateInfo, nullptr,
+    vkCreateAccelerationStructureKHR(device, &acceleration_structure_create_info, nullptr,
                                      &top_level_as_->MutableHandle());
 
     // Create a small scratch buffer used during build of the top level acceleration structure
@@ -635,16 +629,12 @@ void DrawRaytracing::CreateTopLevelAS(const VkDevice device, const VkPhysicalDev
         .firstVertex = 0,
         .transformOffset = 0,
     };
-    std::vector<VkAccelerationStructureBuildRangeInfoKHR*> accelerationBuildStructureRangeInfos = {
-        &acceleration_structure_build_range_info};
+    std::vector<VkAccelerationStructureBuildRangeInfoKHR*>
+        acceleration_build_structure_range_infos = {&acceleration_structure_build_range_info};
 
     const auto command_buffer = BeginSingleTimeCommands(command_pool, device);
-    // Build the acceleration structure on the device via a one-time command buffer submission
-    // Some implementations may support acceleration structure building on the host
-    // (VkPhysicalDeviceAccelerationStructureFeaturesKHR->accelerationStructureHostCommands),
-    // but we prefer device builds
     vkCmdBuildAccelerationStructuresKHR(command_buffer, 1, &acceleration_build_geometry_info,
-                                        accelerationBuildStructureRangeInfos.data());
+                                        acceleration_build_structure_range_infos.data());
     EndSingleTimeCommands(command_buffer, queue, command_pool, device);
 
     const auto acceleration_device_address_info = VkAccelerationStructureDeviceAddressInfoKHR{
