@@ -1,6 +1,5 @@
 #ifndef APP_H
 #define APP_H
-#include <memory>
 
 #include "camera.h"
 #include "common/command_buffer.h"
@@ -21,7 +20,7 @@ namespace vlux {
 class App {
    public:
     App() = delete;
-    App(DeviceResource& device_resource);
+    App(DeviceResource& device_resource, const std::string_view scene_name);
     ~App();
     void Run() { MainLoop(); }
 
@@ -34,7 +33,6 @@ class App {
     std::optional<Gui> gui_ = std::nullopt;
     std::optional<Scene> scene_ = std::nullopt;
     std::optional<Camera> camera_ = std::nullopt;
-
     std::optional<Control> control_ = std::nullopt;
     struct MouseConfig {
         float sens{0.001f};
