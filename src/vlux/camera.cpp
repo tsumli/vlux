@@ -1,7 +1,9 @@
 #include "camera.h"
 
 namespace vlux {
+namespace {
 glm::vec3 Vec4ToVec3(const glm::vec4& vec) { return {vec.x, vec.y, vec.z}; }
+}  // namespace
 
 Camera::Camera(const glm::vec3& pos, const glm::vec3& rot, const float width, const float height)
     : pos_(pos), rot_(rot) {

@@ -2,7 +2,7 @@
 //
 #include "vlux/utils/math.h"
 
-TEST_CASE("utils::Math", "[utils, math]") {
+TEST_CASE("Math::Round", "[utils, math]") {
     REQUIRE(vlux::RoundDivUp(13, 13) == 1);
     REQUIRE(vlux::RoundDivUp(10, 14) == 1);
     REQUIRE(vlux::RoundDivUp(29, 15) == 2);
