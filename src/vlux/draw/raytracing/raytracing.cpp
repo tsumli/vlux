@@ -12,7 +12,7 @@
 #include "shader/shader.h"
 namespace vlux::draw::raytracing {
 namespace {
-constexpr auto kNumDescriptorSetRaytracing = 1;
+constexpr auto kNumDescriptorSetRaytracing = 2;
 }
 
 DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_ubo,
@@ -92,32 +92,47 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
     spdlog::debug("create DescriptorSetLayout");
     [&]() {
         raytracing_descriptor_set_layout_.reserve(kNumDescriptorSetRaytracing);
-        constexpr auto kLayoutBindings = std::to_array({
-            VkDescriptorSetLayoutBinding{
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-            },
-            VkDescriptorSetLayoutBinding{
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-            },
-            VkDescriptorSetLayoutBinding{
-                .binding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-            },
-        });
-        const auto layout_info = VkDescriptorSetLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
-            .pBindings = kLayoutBindings.data(),
-        };
-        raytracing_descriptor_set_layout_.emplace_back(device, layout_info);
+        {
+            // set = 0
+            constexpr auto kLayoutBindings = std::to_array({
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+                },
+                VkDescriptorSetLayoutBinding{
+                    .binding = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+                },
+            });
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+            raytracing_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
+
+        {
+            // set = 1
+            constexpr auto kLayoutBindings = std::to_array({
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+                },
+            });
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(kLayoutBindings.size()),
+                .pBindings = kLayoutBindings.data(),
+            };
+            raytracing_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
     }();
 
     spdlog::debug("create descriptor pool");
@@ -170,29 +185,26 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
         // update descriptor sets
         spdlog::debug("update descriptor sets");
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            const auto descriptor_acceleration_structure_info =
-                VkWriteDescriptorSetAccelerationStructureKHR{
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
-                    .accelerationStructureCount = 1,
-                    .pAccelerationStructures = &top_level_as_->MutableHandle(),
-                };
-
-            const auto storage_image_info = VkDescriptorImageInfo{
-                .imageView =
-                    render_targets_.at(RenderTargetType::kFinalized).value().GetVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            const auto tlas_info = VkWriteDescriptorSetAccelerationStructureKHR{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+                .accelerationStructureCount = 1,
+                .pAccelerationStructures = &top_level_as_->MutableHandle(),
             };
-
             const auto camera_matrix_ubo_buffer_info = VkDescriptorBufferInfo{
                 .buffer = camera_matrix_ubo.GetVkBufferUniform(frame_i),
                 .offset = 0,
                 .range = camera_matrix_ubo.GetUniformBufferObjectSize(),
             };
+            const auto finalized_image_info = VkDescriptorImageInfo{
+                .imageView =
+                    render_targets_.at(RenderTargetType::kFinalized).value().GetVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            };
 
             const auto descriptor_write = std::to_array({
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .pNext = &descriptor_acceleration_structure_info,
+                    .pNext = &tlas_info,
                     .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
                     .dstBinding = 0,
                     .dstArrayElement = 0,
@@ -205,17 +217,17 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                     .dstBinding = 1,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &storage_image_info,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &camera_matrix_ubo_buffer_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
-                    .dstBinding = 2,
+                    .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                    .dstBinding = 0,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .pBufferInfo = &camera_matrix_ubo_buffer_info,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &finalized_image_info,
                 },
             });
 

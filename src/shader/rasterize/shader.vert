@@ -1,4 +1,7 @@
 #version 460
+#extension GL_ARB_shading_language_include : require
+
+#include "frag_input.glsl"
 
 struct TransformParams {
     mat4x4 world;
@@ -8,16 +11,6 @@ struct TransformParams {
 };
 
 layout(set = 0, binding = 0) uniform ubo { TransformParams transform; };
-
-struct FragInput {
-    vec4 position_cs;
-    vec4 position_ws;
-    vec3 normal_ws;
-    vec2 texcoord;
-    vec3 tangent_ws;
-    vec3 bitangent_ws;
-};
-
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec2 in_uv;

@@ -1,13 +1,7 @@
 #version 460
+#extension GL_ARB_shading_language_include : require
 
-struct FragInput {
-    vec4 position_cs;
-    vec4 position_ws;
-    vec3 normal_ws;
-    vec2 texcoord;
-    vec3 tangent_ws;
-    vec3 bitangent_ws;
-};
+#include "frag_input.glsl"
 
 struct MaterialParams {
     vec4 base_color;
