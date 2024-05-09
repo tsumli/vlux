@@ -138,7 +138,7 @@ void App::CreateScene() {
         spdlog::debug("load cubemap: {}", cubemap_path.string());
         return CubeMap(cubemap_path);
     }();
-    spdlog::debug("scene load time: {} ms", timer_.ElapsedMilliseconds());
+    spdlog::debug("scene load time: {} ms", timer_.GetElapsedMilliseconds());
     scene_.emplace(std::move(models), std::move(cubemap));
 }
 
@@ -178,8 +178,8 @@ void App::DrawFrame() {
 
     spdlog::debug("input");
     [&]() {
-        auto& keyboard = control_->GetKeyboard();
-        auto& mouse = control_->GetMouse();
+        const auto& keyboard = control_->MutableKeyboard();
+        auto& mouse = control_->MutableMouse();
         const auto key_input = keyboard.GetInput();
         if (key_input.exit == 1) {
             spdlog::info("Escape key was pressed to exit");
