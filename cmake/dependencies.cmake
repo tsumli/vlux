@@ -7,20 +7,22 @@ add_library(imgui STATIC)
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG 96839b445e32e46d87a44fd43a9cdd60c806f7e1  # the latest commit in the branch `docking`
+  GIT_TAG 96839b445e32e46d87a44fd43a9cdd60c806f7e1 # the latest commit in the branch `docking`
   SOURCE_DIR ${BUILD_LIB_DIR}/imgui
 )
 FetchContent_MakeAvailable(imgui)
 set(IMGUI_INCLUDE ${BUILD_LIB_DIR}/imgui/include) # copy necessary files to ./include
 file(MAKE_DIRECTORY ${IMGUI_INCLUDE})
 set(_imgui_src_list imconfig.h imgui.cpp imgui.h imgui_draw.cpp backends/imgui_impl_glfw.h
-    backends/imgui_impl_glfw.cpp backends/imgui_impl_vulkan.cpp backends/imgui_impl_vulkan.h imgui_internal.h
-    imgui_tables.cpp imgui_widgets.cpp imstb_rectpack.h imstb_textedit.h imstb_truetype.h)
-foreach (orig IN LISTS _imgui_src_list)
-    get_filename_component(dest ${orig} NAME)
-    file(COPY_FILE ${BUILD_LIB_DIR}/imgui/${orig} ${IMGUI_INCLUDE}/${dest} ONLY_IF_DIFFERENT)
-    target_sources(imgui PRIVATE ${IMGUI_INCLUDE}/${dest})
+  backends/imgui_impl_glfw.cpp backends/imgui_impl_vulkan.cpp backends/imgui_impl_vulkan.h imgui_internal.h
+  imgui_tables.cpp imgui_widgets.cpp imstb_rectpack.h imstb_textedit.h imstb_truetype.h)
+
+foreach(orig IN LISTS _imgui_src_list)
+  get_filename_component(dest ${orig} NAME)
+  file(COPY_FILE ${BUILD_LIB_DIR}/imgui/${orig} ${IMGUI_INCLUDE}/${dest} ONLY_IF_DIFFERENT)
+  target_sources(imgui PRIVATE ${IMGUI_INCLUDE}/${dest})
 endforeach()
+
 target_include_directories(${LIB_NAME} PUBLIC ${IMGUI_INCLUDE})
 target_link_libraries(${LIB_NAME} PUBLIC imgui)
 
@@ -37,7 +39,7 @@ set(TINYGLTF_INCLUDE ${BUILD_LIB_DIR}/tinygltf)
 target_include_directories(${LIB_NAME} PUBLIC ${TINYGLTF_INCLUDE})
 target_link_libraries(${LIB_NAME} PUBLIC tinygltf)
 target_compile_definitions(${LIB_NAME} PUBLIC "TINYGLTF_USE_CPP14")
-target_compile_options(tinygltf PRIVATE -Wno-missing-field-initializers)
+target_compile_options(tinygltf PUBLIC -Wno-missing-field-initializers)
 
 # tiny exr
 message(STATUS "Setup tinyexr")
@@ -91,6 +93,17 @@ set(JSON_INCLUDE ${BUILD_LIB_DIR}/json/include)
 target_include_directories(${LIB_NAME} PUBLIC ${JSON_INCLUDE})
 target_link_libraries(${LIB_NAME} PUBLIC nlohmann_json::nlohmann_json)
 
+# Catch2
+message(STATUS "Setup catch2")
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG v3.6.0
+  SOURCE_DIR ${BUILD_LIB_DIR}/catch2
+)
+FetchContent_MakeAvailable(Catch2)
+target_include_directories(${TEST_NAME} PUBLIC ${BUILD_LIB_DIR}/catch2/src/)
+target_link_libraries(${TEST_NAME} PUBLIC Catch2::Catch2)
 
 # download asset
 set(ASSET_DIR ${CMAKE_CURRENT_BINARY_DIR}/assets)
@@ -106,4 +119,3 @@ FetchContent_MakeAvailable(gltf-samples)
 # cubemaps
 message(STATUS "Assets: gum trees")
 file(DOWNLOAD https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/4k/gum_trees_4k.exr ${ASSET_DIR}/cubemap/gum_trees_4k.exr)
-  

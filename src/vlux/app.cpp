@@ -23,7 +23,7 @@
 #include "utils/path.h"
 
 namespace vlux {
-App::App(DeviceResource& device_resource)
+App::App(DeviceResource& device_resource, const std::string_view scene_name)
     : device_resource_(device_resource),
       transform_ubo_(device_resource_.GetDevice().GetVkDevice(),
                      device_resource_.GetVkPhysicalDevice()),
@@ -34,7 +34,7 @@ App::App(DeviceResource& device_resource)
       light_ubo_(device_resource_.GetDevice().GetVkDevice(),
                  device_resource_.GetVkPhysicalDevice()),
       config_(ReadJsonFile(GetCurrentDir() / "config.json")),
-      scene_name_("Sponza") {
+      scene_name_(scene_name) {
     const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto physical_device = device_resource_.GetVkPhysicalDevice();
 
@@ -154,7 +154,7 @@ void App::CreateScene() {
         spdlog::debug("load cubemap: {}", cubemap_path.string());
         return CubeMap(cubemap_path);
     }();
-    spdlog::debug("scene load time: {} ms", timer_.ElapsedMilliseconds());
+    spdlog::debug("scene load time: {} ms", timer_.GetElapsedMilliseconds());
     scene_.emplace(std::move(models), std::move(cubemap));
 }
 
@@ -194,8 +194,8 @@ void App::DrawFrame() {
 
     spdlog::debug("input");
     [&]() {
-        auto& keyboard = control_->GetKeyboard();
-        auto& mouse = control_->GetMouse();
+        auto& keyboard = control_->MutableKeyboard();
+        auto& mouse = control_->MutableMouse();
         const auto key_input = keyboard.GetInput();
         if (key_input.exit == 1) {
             spdlog::info("Escape key was pressed to exit");
