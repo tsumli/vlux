@@ -3,7 +3,7 @@
 #include "common/queue.h"
 
 namespace vlux {
-DeviceResource::DeviceResource(const Window& window) : window_(window) {
+DeviceResource::DeviceResource(const Window& window, const bool vsync) : window_(window) {
     spdlog::debug("Creating Vulkan instance");
     instance_.emplace();
     spdlog::debug("Creating debug messenger");
@@ -18,10 +18,28 @@ DeviceResource::DeviceResource(const Window& window) : window_(window) {
     queues_ = CreateQueue(device_->GetVkDevice(), physical_device_, surface_->GetVkSurface());
     spdlog::debug("Creating swapchain");
     swapchain_.emplace(physical_device_, device_->GetVkDevice(), surface_->GetVkSurface(),
-                       window_.GetGLFWwindow());
+                       window_.GetGLFWwindow(), vsync);
     spdlog::debug("Creating sync object");
     sync_object_.emplace(device_->GetVkDevice());
 }
 
 DeviceResource::~DeviceResource() {}
+
+void DeviceResource::DeviceWaitIdle() const { vkDeviceWaitIdle(device_->GetVkDevice()); }
+
+void DeviceResource::RecreateSwapChain() {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window_.GetGLFWwindow(), &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(window_.GetGLFWwindow(), &width, &height);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(device_->GetVkDevice());
+
+    swapchain_.reset();
+
+    swapchain_.emplace(physical_device_, device_->GetVkDevice(), surface_->GetVkSurface(),
+                       window_.GetGLFWwindow(), false);
+}
 }  // namespace vlux

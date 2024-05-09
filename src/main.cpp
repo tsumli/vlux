@@ -13,6 +13,7 @@ int main() {
     const auto spdlog_level = config.at("spdlog_level").get<std::string>();
     const auto width = config.at("width").get<uint32_t>();
     const auto height = config.at("height").get<uint32_t>();
+    const auto vsync = config.at("vsync").get<bool>();
 
     // setup logger lovel
     if (spdlog_level == "info") {
@@ -22,7 +23,7 @@ int main() {
     }
 
     auto window = vlux::Window(width, height, "vlux");
-    auto device_resource = vlux::DeviceResource(window);
+    auto device_resource = vlux::DeviceResource(window, vsync);
     auto app = vlux::App(device_resource);
     try {
         app.Run();

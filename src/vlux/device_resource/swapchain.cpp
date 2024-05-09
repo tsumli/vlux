@@ -43,13 +43,13 @@ std::vector<VkImageView> CreateImageViews(const VkDevice device, const std::vect
 }
 
 Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice device,
-                     const VkSurfaceKHR surface, GLFWwindow* window)
+                     const VkSurfaceKHR surface, GLFWwindow* window, const bool vsync)
     : device_(device) {
     const auto swapchain_support = QuerySwapChainSupport(physical_device, surface);
     const auto surface_format = ChooseSwapSurfaceFormat(swapchain_support.formats);
     format_.emplace(surface_format.format);
 
-    const auto present_mode = ChooseSwapPresentMode(swapchain_support.present_modes);
+    const auto present_mode = ChooseSwapPresentMode(swapchain_support.present_modes, vsync);
     extent_.emplace(ChooseSwapExtent(swapchain_support.capabilities, window));
 
     image_count_ = [&]() {
@@ -105,9 +105,12 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
     image_views_ = CreateImageViews(device, images_, surface_format.format);
 }
 
-VkPresentModeKHR ChooseSwapPresentMode(
-    const std::vector<VkPresentModeKHR>& available_present_modes) {
+VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes,
+                                       const bool vsync) {
     for (const auto& available_present_mode : available_present_modes) {
+        if (!vsync && available_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+            return available_present_mode;
+        }
         if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return available_present_mode;
         }
