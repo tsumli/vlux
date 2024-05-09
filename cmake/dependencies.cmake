@@ -37,7 +37,7 @@ set(TINYGLTF_INCLUDE ${BUILD_LIB_DIR}/tinygltf)
 target_include_directories(${LIB_NAME} PUBLIC ${TINYGLTF_INCLUDE})
 target_link_libraries(${LIB_NAME} PUBLIC tinygltf)
 target_compile_definitions(${LIB_NAME} PUBLIC "TINYGLTF_USE_CPP14")
-target_compile_options(tinygltf PUBLIC -Wno-missing-field-initializers)
+target_compile_options(tinygltf PRIVATE -Wno-missing-field-initializers)
 
 # tiny exr
 message(STATUS "Setup tinyexr")
@@ -90,18 +90,7 @@ FetchContent_MakeAvailable(json)
 set(JSON_INCLUDE ${BUILD_LIB_DIR}/json/include)
 target_include_directories(${LIB_NAME} PUBLIC ${JSON_INCLUDE})
 target_link_libraries(${LIB_NAME} PUBLIC nlohmann_json::nlohmann_json)
-  
-# Catch2
-message(STATUS "Setup catch2")
-FetchContent_Declare(
-  Catch2
-  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG v3.6.0
-  SOURCE_DIR ${BUILD_LIB_DIR}/catch2
-)
-FetchContent_MakeAvailable(Catch2)
-target_include_directories(${TEST_NAME} PUBLIC ${BUILD_LIB_DIR}/catch2/src/)
-target_link_libraries(${TEST_NAME} PUBLIC Catch2::Catch2)
+
 
 # download asset
 set(ASSET_DIR ${CMAKE_CURRENT_BINARY_DIR}/assets)
@@ -117,3 +106,4 @@ FetchContent_MakeAvailable(gltf-samples)
 # cubemaps
 message(STATUS "Assets: gum trees")
 file(DOWNLOAD https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/4k/gum_trees_4k.exr ${ASSET_DIR}/cubemap/gum_trees_4k.exr)
+  

@@ -10,7 +10,7 @@ class Timer {
 
     void Reset() { start_time_ = std::chrono::high_resolution_clock::now(); }
 
-    float GetElapsedMilliseconds() const {
+    float ElapsedMilliseconds() const {
         const auto end_time = std::chrono::high_resolution_clock::now();
         const auto duration =
             std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time_);

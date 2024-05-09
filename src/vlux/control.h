@@ -55,8 +55,8 @@ class Control {
    public:
     Control() = delete;
     explicit Control(GLFWwindow* window) : keyboard_(window), mouse_(window) {}
-    Keyboard& MutableKeyboard() { return keyboard_; }
-    Mouse& MutableMouse() { return mouse_; }
+    Keyboard& GetKeyboard() { return keyboard_; }
+    Mouse& GetMouse() { return mouse_; }
 
    private:
     Keyboard keyboard_;

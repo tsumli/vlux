@@ -1,8 +1,6 @@
 #ifndef DRAW_RASTERIZE_H
 #define DRAW_RASTERIZE_H
 
-#include "common/image.h"
-#include "light.h"
 #include "pch.h"
 //
 #include "camera.h"
@@ -12,9 +10,11 @@
 #include "common/descriptor_sets.h"
 #include "common/frame_buffer.h"
 #include "common/graphics_pipeline.h"
+#include "common/image.h"
 #include "common/pipeline_layout.h"
 #include "common/render_pass.h"
 #include "draw/draw_strategy.h"
+#include "light.h"
 #include "scene/scene.h"
 #include "texture/texture_sampler.h"
 #include "transform.h"
@@ -34,10 +34,6 @@ class DrawRasterize final : public DrawStrategy {
                   const DeviceResource& device_resource);
     ~DrawRasterize() override = default;
 
-    VkRenderPass GetRenderPass() const override { return render_pass_.value().GetVkRenderPass(); }
-    VkFramebuffer GetFramebuffer(const size_t idx) const override {
-        return framebuffer_.at(idx).GetVkFrameBuffer();
-    }
     void RecordCommandBuffer(const uint32_t image_idx, const VkExtent2D& swapchain_extent,
                              const VkCommandBuffer command_buffer) override;
 
@@ -57,7 +53,7 @@ class DrawRasterize final : public DrawStrategy {
     std::optional<DescriptorPool> graphics_descriptor_pool_;
     //! (kMaxFramesInFlight,)
     std::vector<DescriptorSets> graphics_descriptor_sets_;
-    //! (kMaxFramesInFlight,)
+    //! (kNumDescriptorSetGraphics,)
     std::vector<DescriptorSetLayout> graphics_descriptor_set_layout_;
     //! (kMaxFramesInFlight,)
     std::vector<PipelineLayout> graphics_pipeline_layout_;
@@ -67,7 +63,7 @@ class DrawRasterize final : public DrawStrategy {
     std::optional<DescriptorPool> compute_descriptor_pool_;
     //! (kMaxFramesInFlight,)
     std::vector<DescriptorSets> compute_descriptor_sets_;
-    //! (kMaxFramesInFlight,)
+    //! (kNumDescriptorSetCompute,)
     std::vector<DescriptorSetLayout> compute_descriptor_set_layout_;
     //! (kMaxFramesInFlight,)
     std::vector<PipelineLayout> compute_pipeline_layout_;

@@ -11,7 +11,7 @@ CommandPool::CommandPool(const VkDevice device, const VkPhysicalDevice physical_
     const auto pool_info = VkCommandPoolCreateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = queue_family_indices.graphics_family.value(),
+        .queueFamilyIndex = queue_family_indices.graphics_compute_family.value(),
     };
     if (vkCreateCommandPool(device, &pool_info, nullptr, &command_pool_) != VK_SUCCESS) {
         throw std::runtime_error("failed to create command pool!");

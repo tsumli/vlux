@@ -1,11 +1,26 @@
 #include "device.h"
 
+#include <vulkan/vulkan_core.h>
+
+#include "common/queue.h"
 #include "swapchain.h"
 
 namespace vlux {
 namespace {
-constexpr auto kDeviceExtensions = std::to_array<const char*>(
-    {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_ROBUSTNESS_2_EXTENSION_NAME});
+constexpr auto kDeviceExtensions = std::to_array<const char*>({
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+    VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+    VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+    VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+    VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+});
 }
 
 bool CheckDeviceExtensionSupport(VkPhysicalDevice physical_device) {
@@ -39,13 +54,13 @@ bool IsDeviceSuitable(const VkPhysicalDevice physical_device, const VkSurfaceKHR
     auto supported_features = VkPhysicalDeviceFeatures{};
     vkGetPhysicalDeviceFeatures(physical_device, &supported_features);
 
-    return indices.IsComplete() && extensions_supported && swapchain_adequate &&
+    return IsQueueFamilyIndicesComplete(indices) && extensions_supported && swapchain_adequate &&
            supported_features.samplerAnisotropy;
 }
 
 Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surface) {
     const auto indices = FindQueueFamilies(physical_device, surface);
-    std::set<uint32_t> unique_queue_families = {indices.graphics_family.value(),
+    std::set<uint32_t> unique_queue_families = {indices.graphics_compute_family.value(),
                                                 indices.present_family.value()};
 
     const float queue_priority = 1.0f;
@@ -63,18 +78,50 @@ Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surfac
         return queue_create_infos;
     }();
 
+    auto syncronization_2_features = VkPhysicalDeviceSynchronization2Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+        .pNext = nullptr,
+        .synchronization2 = VK_TRUE,
+    };
+
     auto robustness_2_features = VkPhysicalDeviceRobustness2FeaturesEXT{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+        .pNext = &syncronization_2_features,
         .robustBufferAccess2 = VK_TRUE,
         .robustImageAccess2 = VK_TRUE,
         .nullDescriptor = VK_TRUE,
     };
 
-    const auto device_features = VkPhysicalDeviceFeatures2{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+    auto buffer_device_address_features = VkPhysicalDeviceBufferDeviceAddressFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
         .pNext = &robustness_2_features,
+        .bufferDeviceAddress = VK_TRUE,
+        .bufferDeviceAddressCaptureReplay = VK_TRUE,
+        .bufferDeviceAddressMultiDevice = VK_TRUE,
+    };
+
+    auto raytracing_pipeline_features = VkPhysicalDeviceRayTracingPipelineFeaturesKHR{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+        .pNext = &buffer_device_address_features,
+        .rayTracingPipeline = VK_TRUE,
+        .rayTracingPipelineTraceRaysIndirect = VK_TRUE,
+        .rayTraversalPrimitiveCulling = VK_TRUE,
+    };
+
+    auto acceleration_structure_features = VkPhysicalDeviceAccelerationStructureFeaturesKHR{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+        .pNext = &raytracing_pipeline_features,
+        .accelerationStructure = VK_TRUE,
+        .accelerationStructureCaptureReplay = VK_TRUE,
+        .descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE,
+    };
+
+    auto device_features = VkPhysicalDeviceFeatures2{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &acceleration_structure_features,
         .features =
             VkPhysicalDeviceFeatures{
+                .robustBufferAccess = VK_TRUE,
                 .independentBlend = VK_TRUE,
                 .samplerAnisotropy = VK_TRUE,
             },

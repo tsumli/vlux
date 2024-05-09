@@ -31,7 +31,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // Color
     render_targets_[RenderTargetType::kColor].emplace(
         device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -39,21 +39,22 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // Normal
     render_targets_[RenderTargetType::kNormal].emplace(
         device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Depth Stencil
     render_targets_[RenderTargetType::kDepthStencil].emplace(
-        device, physical_device, width, height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+        device, physical_device, width, height, VK_FORMAT_D32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     // Position
     render_targets_[RenderTargetType::kPosition].emplace(
         device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -61,7 +62,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // Emissive
     render_targets_[RenderTargetType::kEmissive].emplace(
         device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -69,7 +70,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // BaseColorFactor
     render_targets_[RenderTargetType::kBaseColorFactor].emplace(
         device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -77,7 +78,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // MetallicRoughnessFactor
     render_targets_[RenderTargetType::kMetallicRoughnessFactor].emplace(
         device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -85,14 +86,15 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
     // MetallicRoughness
     render_targets_[RenderTargetType::kMetallicRoughness].emplace(
         device, physical_device, width, height, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Finalized
     render_targets_[RenderTargetType::kFinalized].emplace(
-        device, physical_device, width, height, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+        device, physical_device, width, height, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -332,7 +334,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
             // metallic roughness factor
             {
                 .attachment = 5,
-                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
             // metallic roughness
             {
@@ -1288,9 +1290,35 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
 
     // compute
     spdlog::debug("Compute");
+
     // Transition
     [&]() {
-        // depth
+        // normal: write -> read
+        const auto barrier = VkImageMemoryBarrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = render_targets_.at(RenderTargetType::kNormal)->GetVkImage(),
+            .subresourceRange =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+        };
+        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                             &barrier);
+    }();
+
+    [&]() {
+        // depth: write -> read
         const auto barrier = VkImageMemoryBarrier{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
             .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -1334,6 +1362,31 @@ void DrawRasterize::RecordCommandBuffer(const uint32_t image_idx,
             static_cast<uint32_t>(compute_descriptor_sets_.at(image_idx).GetSize()),
             compute_descriptor_sets_.at(image_idx).GetVkDescriptorSetPtr(), 0, nullptr);
         vkCmdDispatch(command_buffer, group_count_x, group_count_y, 1);
+    }();
+
+    [&]() {
+        // depth: read -> write
+        const auto barrier = VkImageMemoryBarrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = render_targets_.at(RenderTargetType::kDepthStencil)->GetVkImage(),
+            .subresourceRange =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+        };
+        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                             VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                             &barrier);
     }();
 }
 

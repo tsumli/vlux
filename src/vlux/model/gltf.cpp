@@ -8,11 +8,6 @@ namespace {
 
 std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
                                            const std::vector<Index>& indices) {
-    if (indices.size() % 3 != 0) {
-        throw std::runtime_error(
-            fmt::format("indices size: {} must be multiple of 3", indices.size()));
-    }
-
     auto tangents = std::vector<glm::vec4>(vertices.size());
     for (size_t i = 0; i < vertices.size(); i += 3) {
         auto& v0 = vertices[indices[i]];
@@ -184,7 +179,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
 
     const auto create_image = [&](const auto image_idx) {
         const auto& image = model.images[image_idx];
-        return Image<uint8_t>(image.image, image.width, image.height, image.component);
+        return Image(image.image, image.width, image.height, image.component);
     };
 
     const auto create_texture = [&](const auto& image) {

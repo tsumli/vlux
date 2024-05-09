@@ -57,7 +57,7 @@ Gui::Gui(const GuiInput& input)
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             },
         });
@@ -77,13 +77,10 @@ Gui::Gui(const GuiInput& input)
             VkSubpassDependency{
                 .srcSubpass = VK_SUBPASS_EXTERNAL,
                 .dstSubpass = 0,
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask = 0,
+                .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             },
         });
 
@@ -153,15 +150,6 @@ void Gui::OnStart() const {
 void Gui::Render(const VkCommandBuffer command_buffer, const uint32_t width, const uint32_t height,
                  const int image_idx) const {
     [&]() {
-        constexpr auto kClearValues = std::to_array<VkClearValue>({
-            // Color
-            {
-                .color =
-                    {
-                        {0.0f, 0.0f, 0.0f, 1.0f},
-                    },
-            },
-        });
         const auto render_pass_info = VkRenderPassBeginInfo{
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .renderPass = render_pass_->GetVkRenderPass(),
@@ -171,8 +159,8 @@ void Gui::Render(const VkCommandBuffer command_buffer, const uint32_t width, con
                     .offset = {0, 0},
                     .extent = {.width = width, .height = height},
                 },
-            .clearValueCount = static_cast<uint32_t>(kClearValues.size()),
-            .pClearValues = kClearValues.data(),
+            .clearValueCount = 0,
+            .pClearValues = nullptr,
         };
         vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
     }();

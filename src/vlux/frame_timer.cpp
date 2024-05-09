@@ -4,11 +4,11 @@ namespace vlux {
 FrameTimer::FrameTimer() { prev_update_ = frame_start_ = std::chrono::system_clock::now(); }
 
 void FrameTimer::Update() {
-    const auto cur = std::chrono::system_clock::now();
+    auto cur = std::chrono::system_clock::now();
     elapsed_ = GetDurationSeconds(frame_start_, cur);
-    const auto elapsed_prev_update = GetDurationSeconds(prev_update_, cur);
-    if (elapsed_prev_update >= 1.0f) {
-        fps_ = static_cast<float>(count_) / elapsed_prev_update;
+    auto elapsedPrevUpdate = GetDurationSeconds(prev_update_, cur);
+    if (elapsedPrevUpdate >= 1.0f) {
+        fps_ = static_cast<float>(count_) / elapsedPrevUpdate;
 
         // Reset
         count_ = 0;

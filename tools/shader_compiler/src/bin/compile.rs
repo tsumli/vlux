@@ -117,6 +117,7 @@ fn compile_path(
 
     let output = command
         .arg(path)
+        .arg("--target-spv=spv1.6")
         .arg("-g")
         .arg("-O0")
         .arg("-o")
@@ -130,7 +131,7 @@ fn compile_path(
 fn compile() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    let extensions = vec!["vert", "frag", "comp"];
+    let extensions = vec!["vert", "frag", "comp", "rchit", "rmiss", "rgen"];
 
     if args.all && args.output_root.exists() {
         std::fs::remove_dir_all(&args.output_root)?;

@@ -9,22 +9,13 @@
 #include "pch.h"
 
 namespace vlux {
-void CreateImage(const uint32_t width, const uint32_t height, VkFormat format,
-                 const VkImageTiling tiling, const VkImageUsageFlags usage,
-                 const VkMemoryPropertyFlags properties, VkImage& image,
-                 VkDeviceMemory& image_memory, const VkDevice device,
-                 const VkPhysicalDevice physical_device);
-
-VkImageView CreateImageView(const VkImage image, const VkFormat format,
-                            const VkImageViewCreateFlags create_flags,
-                            VkImageAspectFlags aspect_flags, const VkDevice device);
-
 class ImageBuffer {
    public:
     ImageBuffer(const VkDevice device, const VkPhysicalDevice physical_device, const uint32_t width,
-                const uint32_t height, const VkFormat format, const VkImageTiling tiling,
-                const VkImageUsageFlags usage, const VkMemoryPropertyFlags properties,
-                const VkImageViewCreateFlags create_flags, VkImageAspectFlags aspect_flags);
+                const uint32_t height, const VkFormat format, const VkImageLayout layout,
+                const VkImageTiling tiling, const VkImageUsageFlags usage,
+                const VkMemoryPropertyFlags properties, const VkImageViewCreateFlags create_flags,
+                VkImageAspectFlags aspect_flags);
 
     ~ImageBuffer();
 

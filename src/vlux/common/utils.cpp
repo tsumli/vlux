@@ -8,6 +8,7 @@ std::pair<int, int> GetWindowSize(GLFWwindow* window) {
 
     return {width, height};
 }
+
 VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, const VkImageTiling tiling,
                              const VkFormatFeatureFlags features,
                              const VkPhysicalDevice physical_device) {
@@ -39,6 +40,8 @@ uint32_t FindMemoryType(const uint32_t type_filter, const VkMemoryPropertyFlags 
         }
     }
 
-    throw std::runtime_error("failed to find suitable memory type!");
+    throw std::runtime_error(
+        fmt::format("failed to find suitable memory type! type_filter: {}, properties: {}",
+                    type_filter, properties));
 }
 }  // namespace vlux

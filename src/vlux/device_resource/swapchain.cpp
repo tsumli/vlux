@@ -43,13 +43,13 @@ std::vector<VkImageView> CreateImageViews(const VkDevice device, const std::vect
 }
 
 Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice device,
-                     const VkSurfaceKHR surface, GLFWwindow* window, const bool vsync)
+                     const VkSurfaceKHR surface, GLFWwindow* window)
     : device_(device) {
     const auto swapchain_support = QuerySwapChainSupport(physical_device, surface);
     const auto surface_format = ChooseSwapSurfaceFormat(swapchain_support.formats);
     format_.emplace(surface_format.format);
 
-    const auto present_mode = ChooseSwapPresentMode(swapchain_support.present_modes, vsync);
+    const auto present_mode = ChooseSwapPresentMode(swapchain_support.present_modes);
     extent_.emplace(ChooseSwapExtent(swapchain_support.capabilities, window));
 
     image_count_ = [&]() {
@@ -63,8 +63,8 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
     }();
 
     const auto indices = FindQueueFamilies(physical_device, surface);
-    const auto queue_family_indices =
-        std::to_array<uint32_t>({indices.graphics_family.value(), indices.present_family.value()});
+    const auto queue_family_indices = std::to_array<uint32_t>(
+        {indices.graphics_compute_family.value(), indices.present_family.value()});
 
     const auto create_info = [&]() {
         auto create_info = VkSwapchainCreateInfoKHR{
@@ -84,7 +84,7 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
             .oldSwapchain = VK_NULL_HANDLE,
         };
 
-        if (indices.graphics_family != indices.present_family) {
+        if (indices.graphics_compute_family != indices.present_family) {
             create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             create_info.queueFamilyIndexCount = static_cast<uint32_t>(queue_family_indices.size());
             create_info.pQueueFamilyIndices = queue_family_indices.data();
@@ -105,12 +105,9 @@ Swapchain::Swapchain(const VkPhysicalDevice physical_device, const VkDevice devi
     image_views_ = CreateImageViews(device, images_, surface_format.format);
 }
 
-VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes,
-                                       const bool vsync) {
+VkPresentModeKHR ChooseSwapPresentMode(
+    const std::vector<VkPresentModeKHR>& available_present_modes) {
     for (const auto& available_present_mode : available_present_modes) {
-        if (!vsync && available_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
-            return available_present_mode;
-        }
         if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return available_present_mode;
         }

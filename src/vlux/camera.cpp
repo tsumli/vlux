@@ -1,9 +1,7 @@
 #include "camera.h"
 
 namespace vlux {
-namespace {
 glm::vec3 Vec4ToVec3(const glm::vec4& vec) { return {vec.x, vec.y, vec.z}; }
-}  // namespace
 
 Camera::Camera(const glm::vec3& pos, const glm::vec3& rot, const float width, const float height)
     : pos_(pos), rot_(rot) {
@@ -58,6 +56,15 @@ TransformParams Camera::CreateTransformParams() {
         .view_proj = proj_matrix_ * view_matrix,
         .world_view_proj = proj_matrix_ * view_matrix * world_matrix_,
         .proj_to_world = proj_to_world_matrix,
+    };
+}
+
+CameraMatrixParams Camera::CreateCameraMatrixParams() {
+    auto view_matrix = CreateViewMatrix();
+
+    return CameraMatrixParams{
+        .view_inverse = glm::inverse(view_matrix),
+        .proj_inverse = glm::inverse(proj_matrix_),
     };
 }
 

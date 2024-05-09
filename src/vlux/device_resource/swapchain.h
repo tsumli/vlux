@@ -7,7 +7,7 @@ class Swapchain {
    public:
     Swapchain() = delete;
     Swapchain(const VkPhysicalDevice physical_device, const VkDevice device,
-              const VkSurfaceKHR surface, GLFWwindow* window, const bool vsync);
+              const VkSurfaceKHR surface, GLFWwindow* window);
     ~Swapchain() {
         for (const auto& image_view : image_views_) {
             vkDestroyImageView(device_, image_view, nullptr);
@@ -66,8 +66,8 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> present_modes;
 };
 
-VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes,
-                                       const bool vsync);
+VkPresentModeKHR ChooseSwapPresentMode(
+    const std::vector<VkPresentModeKHR>& available_present_modes);
 
 VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
 
