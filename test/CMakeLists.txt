@@ -1,5 +1,4 @@
-set(TEST_SRC
-    main.cpp
-    vlux/utils/test_math.cpp
+file(GLOB_RECURSE TEST_SRC
+    "*.cpp"
 )
 target_sources(${TEST_NAME} PRIVATE ${TEST_SRC})
