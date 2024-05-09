@@ -70,23 +70,8 @@ class DeviceResource {
     }
 
     // method
-    void DeviceWaitIdle() const { vkDeviceWaitIdle(device_->GetVkDevice()); }
-
-    void RecreateSwapChain() {
-        int width = 0, height = 0;
-        glfwGetFramebufferSize(window_.GetGLFWwindow(), &width, &height);
-        while (width == 0 || height == 0) {
-            glfwGetFramebufferSize(window_.GetGLFWwindow(), &width, &height);
-            glfwWaitEvents();
-        }
-
-        vkDeviceWaitIdle(device_->GetVkDevice());
-
-        swapchain_.reset();
-
-        swapchain_.emplace(physical_device_, device_->GetVkDevice(), surface_->GetVkSurface(),
-                           window_.GetGLFWwindow());
-    }
+    void DeviceWaitIdle() const;
+    void RecreateSwapChain();
 
    private:
     const Window window_;
