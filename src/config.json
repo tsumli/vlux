@@ -1,5 +1,6 @@
 {
     "width": 1920,
     "height": 1080,
-    "spdlog_level": "debug"
+    "spdlog_level": "debug",
+    "scene": "FeatureTests"
 }

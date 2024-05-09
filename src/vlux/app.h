@@ -1,6 +1,7 @@
 #ifndef APP_H
 #define APP_H
 #include <memory>
+#include <string>
 
 #include "camera.h"
 #include "common/command_buffer.h"
@@ -21,7 +22,7 @@ namespace vlux {
 class App {
    public:
     App() = delete;
-    App(DeviceResource& device_resource);
+    App(DeviceResource& device_resource, const std::string_view scene_name);
     ~App();
     void Run() { MainLoop(); }
 
