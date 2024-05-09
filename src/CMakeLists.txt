@@ -64,7 +64,7 @@ set(LIB_SRC
     # ./utils
     vlux/utils/debug.h
     vlux/utils/io.cpp
-    vlux/utils/math.h
+    vlux/utils/math.cpp
     vlux/utils/path.h
     vlux/utils/string.h
     vlux/utils/timer.h

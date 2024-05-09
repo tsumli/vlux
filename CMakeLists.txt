@@ -19,7 +19,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 # project settings and add targets
 add_executable(${PROJECT_NAME})
-add_library(${LIB_NAME})
+add_library(${LIB_NAME} STATIC)
 add_executable(${TEST_NAME})
 
 # cpp settings
@@ -32,13 +32,13 @@ target_compile_options(${TEST_NAME} PUBLIC -Wno-missing-field-initializers)
 target_link_libraries(
   ${LIB_NAME}
   PUBLIC glfw
-         vulkan
-         dl
-         pthread
-         X11
-         Xxf86vm
-         Xrandr
-         Xi)
+  vulkan
+  dl
+  pthread
+  X11
+  Xxf86vm
+  Xrandr
+  Xi)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIB_NAME})
 
 # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
