@@ -6,6 +6,8 @@
 
 #include "common/buffer.h"
 #include "common/descriptor_set_layout.h"
+#include "model/index.h"
+#include "model/vertex.h"
 #include "scratch_buffer.h"
 #include "shader/shader.h"
 namespace vlux::draw::raytracing {
@@ -370,16 +372,6 @@ void DrawRaytracing::RecordCommandBuffer(const uint32_t image_idx,
 void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                                          const VkPhysicalDevice physical_device,
                                          const VkQueue queue, const VkCommandPool command_pool) {
-    // Setup vertices for a single triangle
-    struct Vertex {
-        float pos[3];
-    };
-    const auto vertices =
-        std::vector<Vertex>{{{1.0f, 1.0f, 0.0f}}, {{-1.0f, 1.0f, 0.0f}}, {{0.0f, -1.0f, 0.0f}}};
-
-    // Setup indices
-    std::vector<uint16_t> indices = {0, 1, 2};
-
     // Setup identity transform matrix
     const auto transform_matrix = VkTransformMatrixKHR{
         .matrix =
@@ -390,38 +382,42 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
             },
     };
 
-    // Create buffers
-    // For the sake of simplicity we won't stage the vertex data to the GPU memory
-    // Vertex buffer
-    spdlog::debug("create vertex buffer");
-    vertex_buffer_.emplace(
-        device, physical_device,
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        sizeof(Vertex) * vertices.size(), vertices.data());
+    for (const auto& model : scene_.GetModels()) {
+        const auto& vertices = model.GetVertexBuffers().at(0).GetVertices();
+        const auto& indices = model.GetIndexBuffers().at(0).GetIndices();
 
-    // Index buffer
-    spdlog::debug("create index buffer");
-    instance_buffer_.emplace(
-        device, physical_device,
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        sizeof(uint16_t) * indices.size(), indices.data());
+        // Create buffers
+        // For the sake of simplicity we won't stage the vertex data to the GPU memory
+        // Vertex buffer
+        spdlog::debug("create vertex buffer");
+        vertex_buffer_.emplace(
+            device, physical_device,
+            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(Vertex) * vertices.size(), vertices.data());
 
-    // Transform buffer
-    spdlog::debug("create transform buffer");
-    transform_buffer_.emplace(
-        device, physical_device,
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        sizeof(VkTransformMatrixKHR), &transform_matrix);
+        // Index buffer
+        spdlog::debug("create index buffer");
+        instance_buffer_.emplace(
+            device, physical_device,
+            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(Index) * indices.size(), indices.data());
 
-    // Build
-    const auto geometries = std::to_array({
-        VkAccelerationStructureGeometryKHR{
+        // Transform buffer
+        spdlog::debug("create transform buffer");
+        transform_buffer_.emplace(
+            device, physical_device,
+            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(VkTransformMatrixKHR), &transform_matrix);
+
+        // Build
+        auto geometries = std::vector<VkAccelerationStructureGeometryKHR>();
+        geometries.emplace_back(VkAccelerationStructureGeometryKHR{
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
             .geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR,
             .geometry =
@@ -437,8 +433,10 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                                         device, vertex_buffer_->GetVkBuffer()),
                                 },
                             .vertexStride = sizeof(Vertex),
-                            .maxVertex = 2,
-                            .indexType = VK_INDEX_TYPE_UINT16,
+                            .maxVertex = static_cast<uint32_t>(vertices.size() - 1),
+                            .indexType = std::is_same<Index, uint16_t>::value
+                                             ? VK_INDEX_TYPE_UINT16
+                                             : VK_INDEX_TYPE_UINT32,
                             .indexData =
                                 {
                                     .deviceAddress = GetBufferDeviceAddress(
@@ -451,79 +449,78 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                                 }},
                 },
             .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
-        },
-    });
+        });
 
-    // Get size info
-    const auto acceleration_structure_build_geometry_info =
-        VkAccelerationStructureBuildGeometryInfoKHR{
+        // Get size info
+        const auto acceleration_structure_build_geometry_info =
+            VkAccelerationStructureBuildGeometryInfoKHR{
+                .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+                .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+                .flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
+                .geometryCount = static_cast<uint32_t>(geometries.size()),
+                .pGeometries = geometries.data(),
+            };
+
+        auto acceleration_structure_build_sizes_info = VkAccelerationStructureBuildSizesInfoKHR{
+            .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,
+        };
+        const auto num_triangles = static_cast<uint32_t>(indices.size() / 3);
+        vkGetAccelerationStructureBuildSizesKHR(
+            device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+            &acceleration_structure_build_geometry_info, &num_triangles,
+            &acceleration_structure_build_sizes_info);
+
+        // Create acceleration structure
+        bottom_level_as_.emplace(device, physical_device, acceleration_structure_build_sizes_info);
+
+        const auto acceleration_structure_createInfo = VkAccelerationStructureCreateInfoKHR{
+            .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+            .buffer = bottom_level_as_->GetBuffer(),
+            .size = acceleration_structure_build_sizes_info.accelerationStructureSize,
+            .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+        };
+        vkCreateAccelerationStructureKHR(device, &acceleration_structure_createInfo, nullptr,
+                                         &bottom_level_as_->MutableHandle());
+
+        // Create a small scratch buffer used during build of the bottom level acceleration
+        // structure
+        auto scratch_buffer = RayTracingScratchBuffer(
+            device, physical_device, acceleration_structure_build_sizes_info.buildScratchSize);
+
+        const auto geometry_info = VkAccelerationStructureBuildGeometryInfoKHR{
             .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
             .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
             .flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
+            .mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+            .dstAccelerationStructure = bottom_level_as_->GetHandle(),
             .geometryCount = static_cast<uint32_t>(geometries.size()),
             .pGeometries = geometries.data(),
+            .scratchData =
+                {
+                    .deviceAddress = scratch_buffer.GetDeviceAddress(),
+                },
         };
 
-    const auto num_triangles = static_cast<uint32_t>(1);
-    auto acceleration_structure_build_sizes_info = VkAccelerationStructureBuildSizesInfoKHR{
-        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,
-    };
-    vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                            &acceleration_structure_build_geometry_info,
-                                            &num_triangles,
-                                            &acceleration_structure_build_sizes_info);
+        const auto range_info = VkAccelerationStructureBuildRangeInfoKHR{
+            .primitiveCount = num_triangles,
+            .primitiveOffset = 0,
+            .firstVertex = 0,
+            .transformOffset = 0,
+        };
+        const auto range_infos = std::to_array({
+            &range_info,
+        });
+        const auto command_buffer = BeginSingleTimeCommands(command_pool, device);
+        vkCmdBuildAccelerationStructuresKHR(command_buffer, 1, &geometry_info, range_infos.data());
+        EndSingleTimeCommands(command_buffer, queue, command_pool, device);
 
-    // Create acceleration structure
-    bottom_level_as_.emplace(device, physical_device, acceleration_structure_build_sizes_info);
-
-    const auto acceleration_structure_createInfo = VkAccelerationStructureCreateInfoKHR{
-        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-        .buffer = bottom_level_as_->GetBuffer(),
-        .size = acceleration_structure_build_sizes_info.accelerationStructureSize,
-        .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-    };
-    vkCreateAccelerationStructureKHR(device, &acceleration_structure_createInfo, nullptr,
-                                     &bottom_level_as_->MutableHandle());
-
-    // Create a small scratch buffer used during build of the bottom level acceleration
-    // structure
-    auto scratch_buffer = RayTracingScratchBuffer(
-        device, physical_device, acceleration_structure_build_sizes_info.buildScratchSize);
-
-    const auto geometry_info = VkAccelerationStructureBuildGeometryInfoKHR{
-        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
-        .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-        .flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
-        .mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
-        .dstAccelerationStructure = bottom_level_as_->GetHandle(),
-        .geometryCount = static_cast<uint32_t>(geometries.size()),
-        .pGeometries = geometries.data(),
-        .scratchData =
-            {
-                .deviceAddress = scratch_buffer.GetDeviceAddress(),
-            },
-    };
-
-    const auto range_info = VkAccelerationStructureBuildRangeInfoKHR{
-        .primitiveCount = num_triangles,
-        .primitiveOffset = 0,
-        .firstVertex = 0,
-        .transformOffset = 0,
-    };
-    const auto range_infos = std::to_array({
-        &range_info,
-    });
-
-    const auto command_buffer = BeginSingleTimeCommands(command_pool, device);
-    vkCmdBuildAccelerationStructuresKHR(command_buffer, 1, &geometry_info, range_infos.data());
-    EndSingleTimeCommands(command_buffer, queue, command_pool, device);
-
-    const auto acceleration_device_address_info = VkAccelerationStructureDeviceAddressInfoKHR{
-        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-        .accelerationStructure = bottom_level_as_->GetHandle(),
-    };
-    bottom_level_as_->SetDeviceAddress(
-        vkGetAccelerationStructureDeviceAddressKHR(device, &acceleration_device_address_info));
+        const auto acceleration_device_address_info = VkAccelerationStructureDeviceAddressInfoKHR{
+            .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+            .accelerationStructure = bottom_level_as_->GetHandle(),
+        };
+        bottom_level_as_->SetDeviceAddress(
+            vkGetAccelerationStructureDeviceAddressKHR(device, &acceleration_device_address_info));
+    }
 }
 
 void DrawRaytracing::CreateTopLevelAS(const VkDevice device, const VkPhysicalDevice physical_device,

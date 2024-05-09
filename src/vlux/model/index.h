@@ -16,12 +16,14 @@ class IndexBuffer {
 
     VkBuffer GetVkBuffer() const { return buffer_->GetVkBuffer(); }
     size_t GetSize() const { return index_count_; }
+    const std::vector<Index>& GetIndices() const { return indices_; }
 
    private:
     const VkDevice device_;
     const size_t index_count_;
 
     std::optional<Buffer> buffer_;
+    std::vector<Index> indices_;
 };
 }  // namespace vlux
 
