@@ -1,4 +1,4 @@
-# Vulkan Rendering
+# vlux
 Real-time rendering playground using C++ and Vulkan.
 
 ## Description
