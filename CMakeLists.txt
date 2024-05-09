@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 project(vlux LANGUAGES CXX)
 set(LIB_NAME ${PROJECT_NAME}-lib)
-
+set(TEST_NAME ${PROJECT_NAME}-test)
 
 # cpp defaults
 set(CMAKE_C_COMPILER /usr/bin/gcc CACHE PATH "")
@@ -19,23 +19,26 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 # project settings and add targets
 add_executable(${PROJECT_NAME})
-add_library(${LIB_NAME})
+add_library(${LIB_NAME} STATIC)
+add_executable(${TEST_NAME})
 
 # cpp settings
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
-target_compile_features(${LIB_NAME} PRIVATE cxx_std_23)
+target_compile_features(${LIB_NAME} PUBLIC cxx_std_23)
+target_compile_features(${TEST_NAME} PUBLIC cxx_std_23)
 target_compile_options(${PROJECT_NAME} PRIVATE -Wno-missing-field-initializers)
-target_compile_options(${LIB_NAME} PRIVATE -Wno-missing-field-initializers)
+target_compile_options(${LIB_NAME} PUBLIC -Wno-missing-field-initializers)
+target_compile_options(${TEST_NAME} PUBLIC -Wno-missing-field-initializers)
 target_link_libraries(
-  ${PROJECT_NAME}
+  ${LIB_NAME}
   PUBLIC glfw
-         vulkan
-         dl
-         pthread
-         X11
-         Xxf86vm
-         Xrandr
-         Xi)
+  vulkan
+  dl
+  pthread
+  X11
+  Xxf86vm
+  Xrandr
+  Xi)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIB_NAME})
 
 # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
@@ -53,3 +56,9 @@ include(cmake/dependencies.cmake)
 # subdirectory
 set(SRC_DIR "./src")
 add_subdirectory(${SRC_DIR})
+
+# test
+set(TEST_DIR "./test")
+add_subdirectory(${TEST_DIR})
+target_link_libraries(${TEST_NAME} PUBLIC ${LIB_NAME})
+target_include_directories(${TEST_NAME} PUBLIC ${SRC_DIR})
