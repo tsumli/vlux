@@ -20,7 +20,7 @@
 #include "utils/path.h"
 
 namespace vlux {
-App::App(DeviceResource& device_resource)
+App::App(DeviceResource& device_resource, const std::string_view scene_name)
     : device_resource_(device_resource),
       transform_ubo_(device_resource_.GetDevice().GetVkDevice(),
                      device_resource_.GetVkPhysicalDevice()),
@@ -29,7 +29,7 @@ App::App(DeviceResource& device_resource)
       light_ubo_(device_resource_.GetDevice().GetVkDevice(),
                  device_resource_.GetVkPhysicalDevice()),
       config_(ReadJsonFile(GetCurrentDir() / "config.json")),
-      scene_name_("Sponza") {
+      scene_name_(scene_name) {
     const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto physical_device = device_resource_.GetVkPhysicalDevice();
 

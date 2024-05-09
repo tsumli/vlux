@@ -65,6 +65,101 @@
                 }
             ]
             // "cubemap": "assets/cubemap/gum_trees_4k.exr"
+        },
+        "FeatureTests": {
+            "models": [
+                // {
+                //     "name": "VertexColorTest",
+                //     "path": "assets/gltf-samples/2.0/VertexColorTest/glTF/VertexColorTest.gltf",
+                //     "scale": 10.0,
+                //     "translation": [
+                //         0.0,
+                //         0.0,
+                //         0.0
+                //     ],
+                //     "rotation": [
+                //         0.0,
+                //         0.0,
+                //         0.0
+                //     ]
+                // },
+                // {
+                //     "name": "TextureCoordinateTest",
+                //     "path": "assets/gltf-samples/2.0/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf",
+                //     "scale": 10.0,
+                //     "translation": [
+                //         0.0,
+                //         0.0,
+                //         0.0
+                //     ],
+                //     "rotation": [
+                //         0.0,
+                //         0.0,
+                //         0.0
+                //     ]
+                // },
+                // {
+                //     "name": "OrientationTest",
+                //     "path": "assets/gltf-samples/2.0/OrientationTest/glTF/OrientationTest.gltf",
+                //     "scale": 10.0,
+                //     "translation": [
+                //         0.0,
+                //         0.0,
+                //         0.0
+                //     ],
+                //     "rotation": [
+                //         0.0,
+                //         0.0,
+                //         0.0
+                //     ]
+                // },
+                {
+                    "name": "MetalRoughSpheres",
+                    "path": "assets/gltf-samples/2.0/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf",
+                    "scale": 1.0,
+                    "translation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                {
+                    "name": "AlphaBlendModeTest",
+                    "path": "assets/gltf-samples/2.0/AlphaBlendModeTest/glTF/AlphaBlendModeTest.gltf",
+                    "scale": 1.0,
+                    "translation": [
+                        50.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                {
+                    "name": "EnvironmentTest",
+                    "path": "assets/gltf-samples/2.0/EnvironmentTest/glTF/EnvironmentTest.gltf",
+                    "scale": 1.0,
+                    "translation": [
+                        50.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            ]
+            // "cubemap": "assets/cubemap/gum_trees_4k.exr"
         }
     }
 }
