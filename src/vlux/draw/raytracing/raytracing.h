@@ -70,7 +70,7 @@ class DrawRaytracing : public DrawStrategy {
     std::unordered_map<RenderTargetType, std::optional<ImageBuffer>> render_targets_;
 
     // Ray tracing acceleration structure
-    std::optional<AccelerationStructure> bottom_level_as_;
+    std::vector<AccelerationStructure> bottom_level_as_;
     std::optional<AccelerationStructure> top_level_as_;
 
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shader_groups_{};

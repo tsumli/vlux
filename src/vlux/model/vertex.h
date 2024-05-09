@@ -54,19 +54,20 @@ constexpr std::array<VkVertexInputAttributeDescription, 4> GetAttributeDescripti
 
 class VertexBuffer {
    public:
-    VertexBuffer(const VkDevice device, const VkPhysicalDevice physical_device,
-                 const VkQueue graphics_queue, const VkCommandPool command_pool,
-                 std::vector<Vertex>&& vertices);
+    VertexBuffer(const VkDevice device, const VkPhysicalDevice physical_device, const VkQueue queue,
+                 const VkCommandPool command_pool, std::vector<Vertex>&& vertices);
     ~VertexBuffer() = default;
     VertexBuffer(const VertexBuffer&) = delete;
     VertexBuffer& operator=(const VertexBuffer&) = delete;
     VertexBuffer(VertexBuffer&&) = default;
     VertexBuffer& operator=(VertexBuffer&&) = default;
     VkBuffer GetVkBuffer() const { return buffer_->GetVkBuffer(); }
+    const std::vector<Vertex>& GetVertices() const { return vertices_; }
 
    private:
     VkDevice device_;
     std::optional<Buffer> buffer_;
+    std::vector<Vertex> vertices_;
 };
 
 }  // namespace vlux
