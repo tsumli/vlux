@@ -74,6 +74,8 @@ class DeviceResource {
     void RecreateSwapChain();
 
    private:
+    constexpr static auto kVsync = false;
+
     const Window window_;
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
     VkQueue graphics_queue_ = VK_NULL_HANDLE;

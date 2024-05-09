@@ -13,7 +13,7 @@ DeviceResource::DeviceResource(const Window& window) : window_(window) {
     std::tie(graphics_queue_, present_queue_) =
         CreateQueue(device_->GetVkDevice(), physical_device_, surface_->GetVkSurface());
     swapchain_.emplace(physical_device_, device_->GetVkDevice(), surface_->GetVkSurface(),
-                       window_.GetGLFWwindow(), false);
+                       window_.GetGLFWwindow(), kVsync);
     sync_object_.emplace(device_->GetVkDevice());
 }
 
@@ -32,7 +32,7 @@ void DeviceResource::RecreateSwapChain() {
     swapchain_.reset();
 
     swapchain_.emplace(physical_device_, device_->GetVkDevice(), surface_->GetVkSurface(),
-                       window_.GetGLFWwindow(), false);
+                       window_.GetGLFWwindow(), kVsync);
 }
 DeviceResource::~DeviceResource() {}
 }  // namespace vlux
