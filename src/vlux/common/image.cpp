@@ -6,8 +6,8 @@
 namespace vlux {
 ImageBuffer::ImageBuffer(const VkDevice device, const VkPhysicalDevice physical_device,
                          const uint32_t width, const uint32_t height, const VkFormat format,
-                         const VkImageTiling tiling, const VkImageUsageFlags usage,
-                         const VkMemoryPropertyFlags properties,
+                         const VkImageLayout layout, const VkImageTiling tiling,
+                         const VkImageUsageFlags usage, const VkMemoryPropertyFlags properties,
                          const VkImageViewCreateFlags create_flags, VkImageAspectFlags aspect_flags)
     : device_(device),
       physical_device_(physical_device),
@@ -26,7 +26,7 @@ ImageBuffer::ImageBuffer(const VkDevice device, const VkPhysicalDevice physical_
         .tiling = tiling,
         .usage = usage,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .initialLayout = layout,
     };
 
     if (vkCreateImage(device, &image_info, nullptr, &image_) != VK_SUCCESS) {

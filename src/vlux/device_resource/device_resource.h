@@ -56,30 +56,32 @@ class DeviceResource {
         }
         return swapchain_.value();
     }
-    const VkQueue& GetGraphicsQueue() const {
-        if (graphics_queue_ == VK_NULL_HANDLE) {
-            throw std::runtime_error("`DeviceResource::graphics_queue_ == `VK_NULL_HANDLE`");
-        }
-        return graphics_queue_;
-    }
-    const VkQueue& GetPresentQueue() const {
-        if (present_queue_ == VK_NULL_HANDLE) {
-            throw std::runtime_error("`DeviceResource::present_queue_ == `VK_NULL_HANDLE`");
-        }
-        return present_queue_;
-    }
+    const VkQueue& GetGraphicsComputeQueue() const { return queues_.graphics_compute; }
+    const VkQueue& GetPresentQueue() const { return queues_.present; }
 
     // method
-    void DeviceWaitIdle() const;
-    void RecreateSwapChain();
+    void DeviceWaitIdle() const { vkDeviceWaitIdle(device_->GetVkDevice()); }
+
+    void RecreateSwapChain() {
+        int width = 0, height = 0;
+        glfwGetFramebufferSize(window_.GetGLFWwindow(), &width, &height);
+        while (width == 0 || height == 0) {
+            glfwGetFramebufferSize(window_.GetGLFWwindow(), &width, &height);
+            glfwWaitEvents();
+        }
+
+        vkDeviceWaitIdle(device_->GetVkDevice());
+
+        swapchain_.reset();
+
+        swapchain_.emplace(physical_device_, device_->GetVkDevice(), surface_->GetVkSurface(),
+                           window_.GetGLFWwindow());
+    }
 
    private:
-    constexpr static auto kVsync = false;
-
     const Window window_;
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
-    VkQueue graphics_queue_ = VK_NULL_HANDLE;
-    VkQueue present_queue_ = VK_NULL_HANDLE;
+    Queues queues_;
 
     std::optional<Instance> instance_ = std::nullopt;
     std::optional<Device> device_ = std::nullopt;

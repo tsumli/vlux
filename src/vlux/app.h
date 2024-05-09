@@ -1,7 +1,6 @@
 #ifndef APP_H
 #define APP_H
 #include <memory>
-#include <string>
 
 #include "camera.h"
 #include "common/command_buffer.h"
@@ -22,7 +21,7 @@ namespace vlux {
 class App {
    public:
     App() = delete;
-    App(DeviceResource& device_resource, const std::string_view scene_name);
+    App(DeviceResource& device_resource);
     ~App();
     void Run() { MainLoop(); }
 
@@ -49,12 +48,14 @@ class App {
     // UBO
     UniformBuffer<TransformParams> transform_ubo_;
     UniformBuffer<CameraParams> camera_ubo_;
+    UniformBuffer<CameraMatrixParams> camera_matrix_ubo_;
     UniformBuffer<LightParams> light_ubo_;
 
     // objects
     std::vector<LightParams> lights_;
 
     // Draw
+    std::string draw_mode_;
     std::unique_ptr<draw::DrawStrategy> draw_ = nullptr;
 
     // Resource

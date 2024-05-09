@@ -6,7 +6,7 @@ namespace vlux {
 
 VkCommandBuffer BeginSingleTimeCommands(const VkCommandPool command_pool, const VkDevice device);
 
-void EndSingleTimeCommands(const VkCommandBuffer command_buffer, const VkQueue graphics_queue,
+void EndSingleTimeCommands(const VkCommandBuffer command_buffer, const VkQueue queue,
                            const VkCommandPool command_pool, const VkDevice device);
 class CommandBuffer {
    public:

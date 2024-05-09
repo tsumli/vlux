@@ -8,8 +8,6 @@ class DrawStrategy {
    public:
     virtual ~DrawStrategy() = default;
 
-    virtual VkRenderPass GetRenderPass() const = 0;
-    virtual VkFramebuffer GetFramebuffer(const size_t idx) const = 0;
     virtual void RecordCommandBuffer(const uint32_t image_idx, const VkExtent2D& swapchain_extent,
                                      const VkCommandBuffer command_buffer) = 0;
     virtual void OnRecreateSwapChain(const DeviceResource& device_resource) = 0;

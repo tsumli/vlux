@@ -35,6 +35,7 @@ void main() {
     const vec2 texcoord = frag_input.texcoord;
     // Texture Loading
     vec3 normal_ts = texture(normal_sampler, texcoord).xyz;
+    // invert y
     normal_ts = normalize(normal_ts * 2.0f - 1.0f);
 
     // TBN matrix

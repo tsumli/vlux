@@ -63,7 +63,7 @@ DebugMessenger::DebugMessenger(const VkInstance instance) : instance_(instance) 
 }
 
 DebugMessenger::~DebugMessenger() {
-    if (kValidationLayers.size() > 0) {
+    if (!kValidationLayers.empty()) {
         DestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
     }
 }

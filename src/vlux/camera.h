@@ -9,6 +9,11 @@ struct CameraParams {
     alignas(16) glm::vec4 position;
 };
 
+struct CameraMatrixParams {
+    alignas(16) glm::mat4 view_inverse;
+    alignas(16) glm::mat4 proj_inverse;
+};
+
 class Camera {
    public:
     Camera() = delete;
@@ -27,6 +32,7 @@ class Camera {
     glm::mat4x4 CreateViewMatrix() const;
 
     TransformParams CreateTransformParams();
+    CameraMatrixParams CreateCameraMatrixParams();
 
    private:
     glm::vec3 pos_{};

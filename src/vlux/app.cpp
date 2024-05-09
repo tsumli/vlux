@@ -1,5 +1,7 @@
 #include "app.h"
 
+#include <vulkan/vulkan_core.h>
+
 #include <exception>
 #include <vector>
 
@@ -10,6 +12,7 @@
 #include "cubemap/cubemap.h"
 #include "device_resource/device.h"
 #include "draw/rasterize/rasterize.h"
+#include "draw/raytracing/raytracing.h"
 #include "gui.h"
 #include "imgui.h"
 #include "light.h"
@@ -20,16 +23,18 @@
 #include "utils/path.h"
 
 namespace vlux {
-App::App(DeviceResource& device_resource, const std::string_view scene_name)
+App::App(DeviceResource& device_resource)
     : device_resource_(device_resource),
       transform_ubo_(device_resource_.GetDevice().GetVkDevice(),
                      device_resource_.GetVkPhysicalDevice()),
       camera_ubo_(device_resource_.GetDevice().GetVkDevice(),
                   device_resource_.GetVkPhysicalDevice()),
+      camera_matrix_ubo_(device_resource_.GetDevice().GetVkDevice(),
+                         device_resource_.GetVkPhysicalDevice()),
       light_ubo_(device_resource_.GetDevice().GetVkDevice(),
                  device_resource_.GetVkPhysicalDevice()),
       config_(ReadJsonFile(GetCurrentDir() / "config.json")),
-      scene_name_(scene_name) {
+      scene_name_("Sponza") {
     const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto physical_device = device_resource_.GetVkPhysicalDevice();
 
@@ -59,8 +64,19 @@ App::App(DeviceResource& device_resource, const std::string_view scene_name)
 
     // setup draw
     spdlog::debug("setup draw");
-    draw_ = std::make_unique<draw::rasterize::DrawRasterize>(
-        transform_ubo_, camera_ubo_, light_ubo_, scene_.value(), device_resource_);
+    draw_mode_ = config_.at("draw_mode").get<std::string>();
+    if (draw_mode_ == "rasterize") {
+        draw_ = std::make_unique<draw::rasterize::DrawRasterize>(
+            transform_ubo_, camera_ubo_, light_ubo_, scene_.value(), device_resource_);
+    } else if (draw_mode_ == "raytracing") {
+        const auto queue = device_resource_.GetGraphicsComputeQueue();
+
+        draw_ = std::make_unique<draw::raytracing::DrawRaytracing>(
+            transform_ubo_, camera_ubo_, camera_matrix_ubo_, light_ubo_, scene_.value(), queue,
+            command_pool_->GetVkCommandPool(), device_resource_);
+    } else {
+        throw std::runtime_error("invalid draw mode");
+    }
 
     // Setup GUI
     spdlog::debug("setup gui");
@@ -71,8 +87,8 @@ App::App(DeviceResource& device_resource, const std::string_view scene_name)
         .device = device,
         .physical_device = physical_device,
         .window = device_resource_.GetGLFWwindow(),
-        .queue_family = queue_family.graphics_family.value(),
-        .queue = device_resource_.GetGraphicsQueue(),
+        .queue_family = queue_family.graphics_compute_family.value(),
+        .queue = device_resource_.GetGraphicsComputeQueue(),
         .image_count = device_resource_.GetSwapchain().GetImageCount(),
         .swapchain_format = device_resource_.GetSwapchain().GetVkFormat(),
         .swapchain_image_views = device_resource_.GetSwapchain().GetVkImageViews(),
@@ -87,7 +103,7 @@ void App::CreateScene() {
     const auto device = device_resource_.GetDevice().GetVkDevice();
     const auto physical_device = device_resource_.GetVkPhysicalDevice();
     const auto command_pool = command_pool_->GetVkCommandPool();
-    const auto graphics_queue = device_resource_.GetGraphicsQueue();
+    const auto graphics_queue = device_resource_.GetGraphicsComputeQueue();
 
     auto models = std::vector<Model>();
     const auto scene_config = config_.at("scenes").at(scene_name_);
@@ -138,7 +154,7 @@ void App::CreateScene() {
         spdlog::debug("load cubemap: {}", cubemap_path.string());
         return CubeMap(cubemap_path);
     }();
-    spdlog::debug("scene load time: {} ms", timer_.GetElapsedMilliseconds());
+    spdlog::debug("scene load time: {} ms", timer_.ElapsedMilliseconds());
     scene_.emplace(std::move(models), std::move(cubemap));
 }
 
@@ -152,6 +168,8 @@ void App::MainLoop() {
 }
 
 void App::DrawFrame() {
+    spdlog::debug("draw frame");
+
     // on init
     gui_->OnStart();
     frame_timer_.Update();
@@ -159,8 +177,6 @@ void App::DrawFrame() {
     const auto& sync_object = device_resource_.GetSyncObject();
     const auto& swapchain = device_resource_.GetSwapchain();
     const auto command_buffer = command_buffer_->GetVkCommandBuffer();
-
-    sync_object.WaitAndResetFences();
 
     uint32_t image_idx;
     {
@@ -178,8 +194,8 @@ void App::DrawFrame() {
 
     spdlog::debug("input");
     [&]() {
-        const auto& keyboard = control_->MutableKeyboard();
-        auto& mouse = control_->MutableMouse();
+        auto& keyboard = control_->GetKeyboard();
+        auto& mouse = control_->GetMouse();
         const auto key_input = keyboard.GetInput();
         if (key_input.exit == 1) {
             spdlog::info("Escape key was pressed to exit");
@@ -226,73 +242,87 @@ void App::DrawFrame() {
         };
         camera_ubo_.UpdateUniformBuffer(camera_params, image_idx);
     }();
+    [&]() {
+        const auto camera_matrix_params = camera_->CreateCameraMatrixParams();
+        camera_matrix_ubo_.UpdateUniformBuffer(camera_matrix_params, image_idx);
+    }();
     [&]() { light_ubo_.UpdateUniformBuffer(lights_.at(0), image_idx); }();
 
-    spdlog::debug("draw frame");
+    spdlog::debug("reset and begin command buffer");
     [&]() {
-        vkResetCommandBuffer(command_buffer, 0);
+        if (vkResetCommandBuffer(command_buffer, 0) != VK_SUCCESS) {
+            throw std::runtime_error("failed to reset command buffer!");
+        }
         const auto begin_info = VkCommandBufferBeginInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         };
         if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
             throw std::runtime_error("failed to begin recording command buffer!");
         }
-        draw_->RecordCommandBuffer(image_idx, swapchain.GetVkExtent(), command_buffer);
     }();
+
+    spdlog::debug("record command buffer");
+    draw_->RecordCommandBuffer(image_idx, swapchain.GetVkExtent(), command_buffer);
 
     const auto& output_render_target = draw_->GetOutputRenderTarget();
 
     // Write Swapchain
     spdlog::debug("write swapchain");
     [&]() {
-        // Transition Image Layout
         [&]() {
-            // output_render_target
-            const auto barrier = VkImageMemoryBarrier{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .srcAccessMask = 0,
-                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .image = output_render_target.GetVkImage(),
-                .subresourceRange =
-                    {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel = 0,
-                        .levelCount = 1,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1,
-                    },
+            const auto barrier = std::to_array({
+                // Transition Image Layout
+                VkImageMemoryBarrier2{
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = output_render_target.GetVkImage(),
+                    .subresourceRange =
+                        {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1,
+                        },
+                },
+                // Swapchain
+                VkImageMemoryBarrier2{
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    .srcAccessMask = VK_ACCESS_2_NONE,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
+                    .subresourceRange =
+                        {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1,
+                        },
+                },
+            });
+
+            const auto dependency_info = VkDependencyInfo{
+                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .bufferMemoryBarrierCount = 0,
+                .pBufferMemoryBarriers = nullptr,
+                .imageMemoryBarrierCount = static_cast<uint32_t>(barrier.size()),
+                .pImageMemoryBarriers = barrier.data(),
             };
-            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                                 &barrier);
-        }();
-        [&]() {
-            // Swapchain
-            const auto barrier = VkImageMemoryBarrier{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .srcAccessMask = 0,
-                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
-                .subresourceRange =
-                    {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel = 0,
-                        .levelCount = 1,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1,
-                    },
-            };
-            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                                 &barrier);
+            vkCmdPipelineBarrier2(command_buffer, &dependency_info);
         }();
 
         const auto image_copy = VkImageCopy{
@@ -320,51 +350,59 @@ void App::DrawFrame() {
         // Transition Image Layout
         [&]() {
             // output_render_target
-            const auto barrier = VkImageMemoryBarrier{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .dstAccessMask = 0,
-                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .image = output_render_target.GetVkImage(),
-                .subresourceRange =
-                    {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel = 0,
-                        .levelCount = 1,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1,
-                    },
+            const auto barrier = std::to_array({
+                VkImageMemoryBarrier2{
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    .srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR,
+                    .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = output_render_target.GetVkImage(),
+                    .subresourceRange =
+                        {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1,
+                        },
+                },
+                // Swapchain
+                VkImageMemoryBarrier2{
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
+                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                                     VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
+                    .subresourceRange =
+                        {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1,
+                        },
+                },
+            });
+            const auto dependency_info = VkDependencyInfo{
+                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .bufferMemoryBarrierCount = 0,
+                .pBufferMemoryBarriers = nullptr,
+                .imageMemoryBarrierCount = static_cast<uint32_t>(barrier.size()),
+                .pImageMemoryBarriers = barrier.data(),
             };
-            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
-                                 nullptr, 1, &barrier);
-        }();
-        [&]() {
-            // Swapchain
-            const auto barrier = VkImageMemoryBarrier{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .dstAccessMask = 0,
-                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
-                .subresourceRange =
-                    {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel = 0,
-                        .levelCount = 1,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1,
-                    },
-            };
-            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
-                                 nullptr, 1, &barrier);
+            vkCmdPipelineBarrier2(command_buffer, &dependency_info);
         }();
     }();
 
@@ -405,29 +443,39 @@ void App::DrawFrame() {
     }();
 
     // Transition Swapchain Layout
+    spdlog::debug("transition swapchain layout");
     [&]() {
         // Swapchain
-        const auto barrier = VkImageMemoryBarrier{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = 0,
-            .dstAccessMask = 0,
-            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
-            .subresourceRange =
-                {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1,
-                },
+        const auto barrier = std::to_array({
+            VkImageMemoryBarrier2{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                .dstAccessMask = VK_ACCESS_2_NONE,
+                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = device_resource_.GetSwapchain().GetVkImages().at(image_idx),
+                .subresourceRange =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel = 0,
+                        .levelCount = 1,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+            },
+        });
+        const auto dependency_info = VkDependencyInfo{
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .bufferMemoryBarrierCount = 0,
+            .pBufferMemoryBarriers = nullptr,
+            .imageMemoryBarrierCount = static_cast<uint32_t>(barrier.size()),
+            .pImageMemoryBarriers = barrier.data(),
         };
-        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0,
-                             nullptr, 1, &barrier);
+        vkCmdPipelineBarrier2(command_buffer, &dependency_info);
     }();
 
     spdlog::debug("end command buffer");
@@ -435,41 +483,57 @@ void App::DrawFrame() {
         throw std::runtime_error("failed to record command buffer!");
     }
 
-    const auto wait_semaphores =
-        std::vector<VkSemaphore>({sync_object.GetVkImageAvailableSemaphore()});
-    const auto wait_stages =
-        std::vector<VkPipelineStageFlags>({VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
-    const auto signal_semaphores =
-        std::vector<VkSemaphore>({sync_object.GetVkRenderFinishedSemaphore()});
-
-    const auto command_buffers = std::to_array({command_buffer});
-
-    const auto submit_info = VkSubmitInfo{
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = static_cast<uint32_t>(wait_semaphores.size()),
-        .pWaitSemaphores = wait_semaphores.data(),
-        .pWaitDstStageMask = wait_stages.data(),
-        .commandBufferCount = static_cast<uint32_t>(command_buffers.size()),
-        .pCommandBuffers = command_buffers.data(),
-        .signalSemaphoreCount = static_cast<uint32_t>(signal_semaphores.size()),
-        .pSignalSemaphores = signal_semaphores.data(),
+    spdlog::debug("submit command buffer");
+    const auto wait_semaphore_submit_infos = std::vector<VkSemaphoreSubmitInfo>({{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = sync_object.GetVkImageAvailableSemaphore(),
+        .stageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    }});
+    const auto signal_semaphore_submit_infos = std::vector<VkSemaphoreSubmitInfo>({{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = sync_object.GetVkRenderFinishedSemaphore(),
+    }});
+    const auto command_buffers = std::to_array({
+        VkCommandBufferSubmitInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+            .commandBuffer = command_buffer,
+        },
+    });
+    const auto submit_info = VkSubmitInfo2{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .waitSemaphoreInfoCount = static_cast<uint32_t>(wait_semaphore_submit_infos.size()),
+        .pWaitSemaphoreInfos = wait_semaphore_submit_infos.data(),
+        .commandBufferInfoCount = static_cast<uint32_t>(command_buffers.size()),
+        .pCommandBufferInfos = command_buffers.data(),
+        .signalSemaphoreInfoCount = static_cast<uint32_t>(signal_semaphore_submit_infos.size()),
+        .pSignalSemaphoreInfos = signal_semaphore_submit_infos.data(),
     };
-
-    if (vkQueueSubmit(device_resource_.GetGraphicsQueue(), 1, &submit_info,
-                      sync_object.GetVkInFlightFence()) != VK_SUCCESS) {
+    if (vkQueueSubmit2(device_resource_.GetGraphicsComputeQueue(), 1, &submit_info,
+                       sync_object.GetVkInFlightFence()) != VK_SUCCESS) {
         throw std::runtime_error("failed to submit draw command buffer!");
     }
 
+    spdlog::debug("present");
     const auto swapchains = std::vector<VkSwapchainKHR>{swapchain.GetVkSwapchain()};
+    const auto wait_semaphores = std::vector<VkSemaphore>({
+        sync_object.GetVkRenderFinishedSemaphore(),
+    });
+    auto results = std::vector<VkResult>(swapchains.size());
     const auto present_info = VkPresentInfoKHR{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = static_cast<uint32_t>(signal_semaphores.size()),
-        .pWaitSemaphores = signal_semaphores.data(),
+        .waitSemaphoreCount = static_cast<uint32_t>(wait_semaphores.size()),
+        .pWaitSemaphores = wait_semaphores.data(),
         .swapchainCount = static_cast<uint32_t>(swapchains.size()),
         .pSwapchains = swapchains.data(),
         .pImageIndices = &image_idx,
+        .pResults = results.data(),
     };
-    vkQueuePresentKHR(device_resource_.GetPresentQueue(), &present_info);
+    if (vkQueuePresentKHR(device_resource_.GetPresentQueue(), &present_info) != VK_SUCCESS) {
+        throw std::runtime_error("failed to present swap chain image!");
+    }
+
+    spdlog::debug("fence: wait and reset");
+    sync_object.WaitAndResetFences();
 }
 
 }  // namespace vlux
