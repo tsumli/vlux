@@ -1,5 +1,7 @@
 #include "gltf.h"
 
+#include <glm/ext/quaternion_geometric.hpp>
+
 #include "common/image.h"
 
 namespace vlux {

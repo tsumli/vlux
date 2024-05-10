@@ -26,6 +26,8 @@ layout(set = 0, binding = 3) uniform ubo_transform { TransformParams transform; 
 
 layout(set = 1, binding = 1) uniform sampler2D base_colors[];
 layout(set = 1, binding = 2) uniform sampler2D normals[];
+layout(set = 1, binding = 3) uniform sampler2D emissives[];
+layout(set = 1, binding = 4) uniform sampler2D metallic_roughnesses[];
 
 #include "bufferreferences.glsl"
 #include "geometry_node.glsl"
@@ -75,15 +77,29 @@ void main() {
         texture(normals[nonuniformEXT(geometry_node.texture_index_normal)], tri.uv).rgb;
     normal_ts = normalize(normal_ts * 2.0f - 1.0f);
 
-    const vec3 normal_ws = normalize(mat3x3(transform.world) * tri.normal);
-    vec3 tangent = vec3(1, 0, 0);
-    vec3 tangent_ws = normalize(tangent - dot(tangent, tri.normal) * tri.normal);
-    vec3 bitangent_ws = cross(tangent_ws, normal_ws);
-    const mat3x3 tbn = mat3x3(tangent_ws, bitangent_ws, normal_ws);
-    const vec3 normal = tbn * normal_ts;
+    vec3 emissive = vec3(0);
+    if (geometry_node.texture_index_emissive != -1) {
+        emissive =
+            texture(emissives[nonuniformEXT(geometry_node.texture_index_emissive)], tri.uv).rgb;
+    }
 
-    const float roughness = 0.3;
-    const float metallic = 0.1;
+    vec4 metallic_roughness = vec4(0.3, 0.3, 0.0, 0.0);
+    if (geometry_node.texture_index_metallic_roughness != -1) {
+        metallic_roughness = texture(
+            metallic_roughnesses[nonuniformEXT(geometry_node.texture_index_metallic_roughness)],
+            tri.uv);
+    }
+
+    const vec3 normal_ws = normalize(mat3x3(transform.world) * tri.normal);
+    const vec3 tangent_ws = normalize(mat3x3(transform.world) * normalize(tri.tangent.xyz));
+    const vec3 bitangent_ws = normalize(cross(normal_ws, tangent_ws)) * tri.tangent.w;
+    // const vec3 tangent_ws = normalize(tangent - dot(tangent, normal_ws) * normal_ws);
+    // const vec3 bitangent_ws = cross(normal_ws, tangent_ws);
+    const mat3x3 tbn = mat3x3(tangent_ws, bitangent_ws, normal_ws);
+    vec3 normal = tbn * normal_ts;
+
+    const float metallic = metallic_roughness.r;
+    const float roughness = metallic_roughness.g;
 
     const float dist = length(light.pos.xyz - tri.pos.xyz);
     const float attenuation = 3.0 / (1.0 + 0.07 * dist + 0.017 * dist * dist) * light.range;
@@ -95,7 +111,6 @@ void main() {
                          metallic) *
         light.color.xyz * attenuation;
 
-    const vec3 emissive = vec3(0.0, 0.0, 0.0);
     const vec3 final_color = clamp(cook_torrance_brdf, 0.0, 1.0) + emissive;
 
     switch (mode.mode) {
@@ -126,6 +141,14 @@ void main() {
         }
         case 6: {
             hit_value = base_color;
+            break;
+        }
+        case 7: {
+            hit_value = vec3(metallic, roughness, 0.0);
+            break;
+        }
+        case 8: {
+            hit_value = emissive;
             break;
         }
         default: {
