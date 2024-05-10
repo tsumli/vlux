@@ -174,6 +174,24 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
                     .pImmutableSamplers = nullptr,
                 },
+                // emissive
+                VkDescriptorSetLayoutBinding{
+                    .binding = 3,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = static_cast<uint32_t>(scene_.GetModels().size()),
+                    .stageFlags =
+                        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+                    .pImmutableSamplers = nullptr,
+                },
+                // metallic roughness
+                VkDescriptorSetLayoutBinding{
+                    .binding = 4,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = static_cast<uint32_t>(scene_.GetModels().size()),
+                    .stageFlags =
+                        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+                    .pImmutableSamplers = nullptr,
+                },
             });
             const auto layout_info = VkDescriptorSetLayoutCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -222,10 +240,10 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 3,
             },
-            // color + normal
+            // color + normal + emissive + metallic roughness
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 2,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 4,
             },
             // geometry
             VkDescriptorPoolSize{
@@ -281,6 +299,14 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
         auto normal_image_infos = std::vector<VkDescriptorImageInfo>();
         normal_image_infos.reserve(scene.GetModels().size());
 
+        // emissive
+        auto emissive_image_infos = std::vector<VkDescriptorImageInfo>();
+        emissive_image_infos.reserve(scene.GetModels().size());
+
+        // metallic roughness
+        auto metallic_roughness_image_infos = std::vector<VkDescriptorImageInfo>();
+        metallic_roughness_image_infos.reserve(scene.GetModels().size());
+
         for (const auto& model : scene.GetModels()) {
             const auto base_color_image_view = get_image_view(model.GetBaseColorTexture());
             base_color_image_infos.emplace_back(VkDescriptorImageInfo{
@@ -291,8 +317,24 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
 
             const auto normal_image_view = get_image_view(model.GetNormalTexture());
             normal_image_infos.emplace_back(VkDescriptorImageInfo{
-                .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
+                .sampler = texture_samplers_.at(TextureSamplerType::kNormal)->GetSampler(),
                 .imageView = normal_image_view,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            });
+
+            const auto emissive_image_view = get_image_view(model.GetEmissiveTexture());
+            emissive_image_infos.emplace_back(VkDescriptorImageInfo{
+                .sampler = texture_samplers_.at(TextureSamplerType::kEmmisive)->GetSampler(),
+                .imageView = emissive_image_view,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            });
+
+            const auto metallic_roughness_image_view =
+                get_image_view(model.GetMetallicRoughnessTexture());
+            metallic_roughness_image_infos.emplace_back(VkDescriptorImageInfo{
+                .sampler =
+                    texture_samplers_.at(TextureSamplerType::kMetallicRoughness)->GetSampler(),
+                .imageView = metallic_roughness_image_view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             });
         }
@@ -393,6 +435,25 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                      .descriptorCount = static_cast<uint32_t>(normal_image_infos.size()),
                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                      .pImageInfo = normal_image_infos.data(),
+                 },
+                 VkWriteDescriptorSet{
+                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                     .dstBinding = 3,
+                     .dstArrayElement = 0,
+                     .descriptorCount = static_cast<uint32_t>(emissive_image_infos.size()),
+                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                     .pImageInfo = emissive_image_infos.data(),
+                 },
+                 VkWriteDescriptorSet{
+                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                     .dstBinding = 4,
+                     .dstArrayElement = 0,
+                     .descriptorCount =
+                         static_cast<uint32_t>(metallic_roughness_image_infos.size()),
+                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                     .pImageInfo = metallic_roughness_image_infos.data(),
                  },
                  VkWriteDescriptorSet{
                      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -663,6 +724,10 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                 model.GetBaseColorTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
             .texture_index_normal =
                 model.GetNormalTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
+            .texture_index_emissive =
+                model.GetEmissiveTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
+            .texture_index_metallic_roughness =
+                model.GetMetallicRoughnessTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
         });
 
         // Get size info
