@@ -20,22 +20,17 @@ std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
         const auto delta_uv_2 = v2.uv - v0.uv;
 
         const auto det = delta_uv_1.x * delta_uv_2.y - delta_uv_2.x * delta_uv_1.y;
+        if (std::fabs(det) < 1e-8f) continue;  // Skip degenerate triangles
         glm::vec3 tangent, bitangent;
-        float f;
-        if (std::abs(det) < 1e-8f) {  // Use default values when det is very small
-            // Default tangent and bitangent if determinant is too small
-            tangent = glm::vec3(1.0, 0.0, 0.0);    // Arbitrary choice, adjust as needed
-            bitangent = glm::vec3(0.0, 1.0, 0.0);  // Make sure it's orthogonal to the tangent
-        } else {
-            f = 1.0f / det;
-            tangent = f * (delta_uv_2.y * edge_1 - delta_uv_1.y * edge_2);
-            bitangent = f * (-delta_uv_2.x * edge_1 + delta_uv_1.x * edge_2);
-            tangent = glm::normalize(tangent);  // Normalize the tangent to avoid scaling issues
-        }
+        const auto f = 1.0f / det;
+        tangent = f * (delta_uv_2.y * edge_1 - delta_uv_1.y * edge_2);
+        bitangent = f * (-delta_uv_2.x * edge_1 + delta_uv_1.x * edge_2);
+        tangent = glm::normalize(tangent);
+        bitangent = glm::normalize(bitangent);
 
         // Compute the handedness (whether the bitangent needs to be flipped)
         const auto handedness =
-            (glm::dot(glm::cross(v0.normal, tangent), bitangent) < 0.0f) ? -1.0f : 1.0f;
+            (glm::dot(glm::cross(v0.normal, tangent), bitangent) < 0.0f) ? 1.0f : -1.0f;
 
         // Store the tangent and its handedness in the vertex
         tangents[indices[i]] = glm::vec4(tangent, handedness);

@@ -66,7 +66,6 @@ vec3 CookTorranceBRDF(in const vec3 N, in const vec3 V, in const vec3 L, in cons
 }
 
 void main() {
-    // 16-bit
     Triangle tri = UnpackTriangle(gl_PrimitiveID);
     GeometryNode geometry_node = geometry_nodes.nodes[gl_InstanceID];
 
@@ -77,7 +76,7 @@ void main() {
     normal_ts = normalize(normal_ts * 2.0f - 1.0f);
 
     const vec3 normal_ws = normalize(mat3x3(transform.world) * tri.normal);
-    const vec3 tangent_ws = normalize(mat3x3(transform.world) * tri.tangent.xyz);
+    const vec3 tangent_ws = normalize(mat3x3(transform.world) * normalize(tri.tangent.xyz));
     const vec3 bitangent_ws = normalize(cross(normal_ws, tangent_ws)) * tri.tangent.w;
     const mat3x3 tbn = mat3x3(tangent_ws, bitangent_ws, normal_ws);
     const vec3 normal = tbn * normal_ts;
@@ -86,7 +85,7 @@ void main() {
     const float metallic = 0.1;
 
     const float dist = length(light.pos.xyz - tri.pos.xyz);
-    const float attenuation = 1.0 / (1.0 + 0.07 * dist + 0.017 * dist * dist) * light.range;
+    const float attenuation = 3.0 / (1.0 + 0.07 * dist + 0.017 * dist * dist) * light.range;
 
     // Calculate final color.
     const vec3 cook_torrance_brdf =

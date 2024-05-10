@@ -2,6 +2,6 @@
     "width": 1920,
     "height": 1080,
     "spdlog_level": "debug",
-    "scene": "Sponza",
+    "scene": "ToyCar",
     "vsync": true
 }
