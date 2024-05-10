@@ -9,15 +9,21 @@
 
 hitAttributeEXT vec2 attribs;
 
-layout(set = 0, binding = 1) uniform sampler2D base_color_sampler;
+layout(set = 1, binding = 1) uniform sampler2D base_colors[];
+
+layout(location = 3) rayPayloadInEXT uint payload_seed;
 
 #include "bufferreferences.glsl"
+#include "geometry_node.glsl"
 #include "geometrytypes.glsl"
+#include "random.glsl"
 
 void main() {
     Triangle tri = UnpackTriangle(gl_PrimitiveID);
-    vec4 color = texture(base_color_sampler, tri.uv);
-    if (color.a < 0.9) {
+    GeometryNode geometry_node = geometry_nodes.nodes[gl_InstanceID];
+    vec4 base_color =
+        texture(base_colors[nonuniformEXT(geometry_node.texture_index_base_color)], tri.uv);
+    if (rnd(payload_seed) > base_color.a) {
         ignoreIntersectionEXT;
     }
 }

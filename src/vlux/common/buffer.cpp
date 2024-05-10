@@ -24,7 +24,10 @@ void FlushMappedMemory(const VkDeviceMemory buffer_memory, const VkDevice device
 Buffer::Buffer(const VkDevice device, const VkPhysicalDevice physical_device,
                const VkBufferUsageFlags usage_flags, const VkMemoryPropertyFlags memory_properties,
                const VkDeviceSize size, const void* data)
-    : device_(device), usage_flags_(usage_flags), memory_properties_(memory_properties) {
+    : device_(device),
+      usage_flags_(usage_flags),
+      memory_properties_(memory_properties),
+      size_(size) {
     const auto buffer_info = VkBufferCreateInfo{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,

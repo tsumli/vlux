@@ -166,6 +166,7 @@ void main() {
                        vec4(pixel_metallic_roughness.xyz, 1.0f));
             break;
         default:
+            imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(0.0f, 0.0f, 0.0f, 1.0f));
             break;
     }
 }

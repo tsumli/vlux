@@ -19,7 +19,13 @@
 #include "uniform_buffer.h"
 
 namespace vlux::draw::raytracing {
-// Holds data for a ray tracing scratch buffer that is used as a temporary storage
+struct GeometryNode {
+    uint64_t vertex_buffer_device_address;
+    uint64_t index_buffer_device_address;
+    int32_t texture_index_base_color;
+    int32_t dummy;
+};
+
 struct ModePushConstants {
     uint32_t mode;
 };
@@ -78,12 +84,15 @@ class DrawRaytracing : public DrawStrategy {
 
     uint32_t mode_{0};
 
-    std::optional<Buffer> vertex_buffer_;
-    std::optional<Buffer> index_buffer_;
-    std::optional<Buffer> transform_buffer_;
+    std::vector<Buffer> vertex_buffer_;
+    std::vector<Buffer> index_buffer_;
+    std::vector<Buffer> transform_buffer_;
     std::optional<Buffer> raygen_shader_binding_table_;
     std::optional<Buffer> miss_shader_binding_table_;
     std::optional<Buffer> hit_shader_binding_table_;
+    std::vector<GeometryNode> geometry_nodes_;  // TODO: define in cpp-side
+    std::optional<Buffer> geometry_node_buffer_;
+
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR raytracing_pipeline_properties_{};
     VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features_{};
 
