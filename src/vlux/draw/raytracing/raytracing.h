@@ -14,6 +14,7 @@
 #include "draw/draw_strategy.h"
 #include "light.h"
 #include "scene/scene.h"
+#include "texture/texture_sampler.h"
 #include "transform.h"
 #include "uniform_buffer.h"
 
@@ -78,7 +79,7 @@ class DrawRaytracing : public DrawStrategy {
     uint32_t mode_{0};
 
     std::optional<Buffer> vertex_buffer_;
-    std::optional<Buffer> instance_buffer_;
+    std::optional<Buffer> index_buffer_;
     std::optional<Buffer> transform_buffer_;
     std::optional<Buffer> raygen_shader_binding_table_;
     std::optional<Buffer> miss_shader_binding_table_;
@@ -96,6 +97,9 @@ class DrawRaytracing : public DrawStrategy {
     std::vector<PipelineLayout> raytracing_pipeline_layout_;
     //! (kMaxFramesInFlight,)
     std::vector<RaytracingPipeline> raytracing_pipeline_;
+
+    enum class TextureSamplerType { kColor, kCount };
+    std::unordered_map<TextureSamplerType, std::optional<TextureSampler>> texture_samplers_;
 
     PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
     PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
