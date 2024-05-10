@@ -122,6 +122,22 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                                   VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
                                   VK_SHADER_STAGE_MISS_BIT_KHR,
                 },
+                // Light
+                VkDescriptorSetLayoutBinding{
+                    .binding = 2,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags =
+                        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+                },
+                // Transform
+                VkDescriptorSetLayoutBinding{
+                    .binding = 3,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+                                  VK_SHADER_STAGE_ANY_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+                },
             });
             const auto layout_info = VkDescriptorSetLayoutCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -201,10 +217,10 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
             },
-            // camera
+            // camera + light + transform
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 3,
             },
             // color + normal
             VkDescriptorPoolSize{
@@ -292,12 +308,21 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .offset = 0,
                 .range = camera_matrix_ubo.GetUniformBufferObjectSize(),
             };
+            const auto light_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = light_ubo.GetVkBufferUniform(frame_i),
+                .offset = 0,
+                .range = light_ubo.GetUniformBufferObjectSize(),
+            };
+            const auto transform_ubo_buffer_info = VkDescriptorBufferInfo{
+                .buffer = transform_ubo.GetVkBufferUniform(frame_i),
+                .offset = 0,
+                .range = transform_ubo.GetUniformBufferObjectSize(),
+            };
             const auto finalized_image_info = VkDescriptorImageInfo{
                 .imageView =
                     render_targets_.at(RenderTargetType::kFinalized).value().GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
-
             const auto geometry_buffer_info = VkDescriptorBufferInfo{
                 .buffer = geometry_node_buffer_->GetVkBuffer(),
                 .offset = 0,
@@ -323,6 +348,24 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                      .descriptorCount = 1,
                      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                      .pBufferInfo = &camera_matrix_ubo_buffer_info,
+                 },
+                 VkWriteDescriptorSet{
+                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
+                     .dstBinding = 2,
+                     .dstArrayElement = 0,
+                     .descriptorCount = 1,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .pBufferInfo = &light_ubo_buffer_info,
+                 },
+                 VkWriteDescriptorSet{
+                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(0),
+                     .dstBinding = 3,
+                     .dstArrayElement = 0,
+                     .descriptorCount = 1,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .pBufferInfo = &transform_ubo_buffer_info,
                  },
                  VkWriteDescriptorSet{
                      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

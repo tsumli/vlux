@@ -19,21 +19,21 @@
     "scenes": {
         "Sponza": {
             "models": [
-                // {
-                //     "name": "Sponza",
-                //     "path": "assets/gltf-samples/2.0/Sponza/glTF/Sponza.gltf",
-                //     "scale": 0.1,
-                //     "translation": [
-                //         0.0,
-                //         0.0,
-                //         0.0
-                //     ],
-                //     "rotation": [
-                //         0.0,
-                //         0.0,
-                //         0.0
-                //     ]
-                // },
+                {
+                    "name": "Sponza",
+                    "path": "assets/gltf-samples/2.0/Sponza/glTF/Sponza.gltf",
+                    "scale": 0.1,
+                    "translation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
                 {
                     "name": "Boombox",
                     "path": "assets/gltf-samples/2.0/BoomBox/glTF/BoomBox.gltf",
