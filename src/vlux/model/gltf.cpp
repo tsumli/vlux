@@ -6,6 +6,7 @@ namespace vlux {
 
 namespace {
 
+// TODO: This function is not working correctly
 std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
                                            const std::vector<Index>& indices) {
     auto tangents = std::vector<glm::vec4>(vertices.size());
