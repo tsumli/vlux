@@ -23,7 +23,7 @@ struct GeometryNode {
     uint64_t vertex_buffer_device_address;
     uint64_t index_buffer_device_address;
     int32_t texture_index_base_color;
-    int32_t dummy;
+    int32_t texture_index_normal;
 };
 
 struct ModePushConstants {

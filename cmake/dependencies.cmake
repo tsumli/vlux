@@ -107,6 +107,7 @@ target_link_libraries(${TEST_NAME} PUBLIC Catch2::Catch2)
 
 # download asset
 set(ASSET_DIR ${CMAKE_CURRENT_BINARY_DIR}/assets)
+
 message(STATUS "Assets: gltf-samples")
 FetchContent_Declare(
   gltf-samples

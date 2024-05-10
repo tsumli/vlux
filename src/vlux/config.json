@@ -34,21 +34,21 @@
                 //         0.0
                 //     ]
                 // },
-                {
-                    "name": "Boombox",
-                    "path": "assets/gltf-samples/2.0/BoomBox/glTF/BoomBox.gltf",
-                    "scale": 500.0,
-                    "translation": [
-                        0.0,
-                        5.0,
-                        0.0
-                    ],
-                    "rotation": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ]
-                },
+                // {
+                //     "name": "Boombox",
+                //     "path": "assets/gltf-samples/2.0/BoomBox/glTF/BoomBox.gltf",
+                //     "scale": 500.0,
+                //     "translation": [
+                //         0.0,
+                //         5.0,
+                //         0.0
+                //     ],
+                //     "rotation": [
+                //         0.0,
+                //         0.0,
+                //         0.0
+                //     ]
+                // },
                 {
                     "name": "DamegedHelmet",
                     "path": "assets/gltf-samples/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf",
@@ -161,6 +161,25 @@
                 }
             ]
             // "cubemap": "assets/cubemap/gum_trees_4k.exr"
+        },
+        "ToyCar": {
+            "models": [
+                {
+                    "name": "ToyCar",
+                    "path": "assets/gltf-samples/2.0/ToyCar/glTF/ToyCar.gltf",
+                    "scale": 0.05,
+                    "translation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        90.0,
+                        180.0
+                    ]
+                }
+            ]
         }
     }
 }

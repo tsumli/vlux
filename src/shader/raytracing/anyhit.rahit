@@ -10,6 +10,7 @@
 hitAttributeEXT vec2 attribs;
 
 layout(set = 1, binding = 1) uniform sampler2D base_colors[];
+layout(set = 1, binding = 2) uniform sampler2D normals[];
 
 layout(location = 3) rayPayloadInEXT uint payload_seed;
 
