@@ -28,6 +28,7 @@ class Buffer {
     ~Buffer();
 
     VkBuffer GetVkBuffer() const { return buffer_; }
+    VkDeviceSize GetSize() const { return size_; }
 
     void UpdateBuffer(const void* data, const VkDeviceSize size);
 
@@ -40,6 +41,8 @@ class Buffer {
     VkMemoryPropertyFlags memory_properties_;
 
     void* mapped = nullptr;
+
+    VkDeviceSize size_ = 0;
 };
 
 void CopyBuffer(const VkBuffer src_buffer, const VkBuffer dst_buffer, const VkDeviceSize size,

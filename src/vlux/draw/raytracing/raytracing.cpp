@@ -13,7 +13,7 @@
 #include "utils/math.h"
 namespace vlux::draw::raytracing {
 namespace {
-constexpr auto kNumDescriptorSetRaytracing = 2;
+constexpr auto kNumDescriptorSetRaytracing = 3;
 }
 
 DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_ubo,
@@ -132,7 +132,7 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
         }
         {
             // set = 1
-            constexpr auto kLayoutBindings = std::to_array({
+            const auto layout_bindings = std::to_array({
                 // Finalized
                 VkDescriptorSetLayoutBinding{
                     .binding = 0,
@@ -144,10 +144,29 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 VkDescriptorSetLayoutBinding{
                     .binding = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .descriptorCount = 1,
+                    .descriptorCount = static_cast<uint32_t>(scene_.GetModels().size()),
                     .stageFlags =
                         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
                     .pImmutableSamplers = nullptr,
+                },
+            });
+            const auto layout_info = VkDescriptorSetLayoutCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .bindingCount = static_cast<uint32_t>(layout_bindings.size()),
+                .pBindings = layout_bindings.data(),
+            };
+            raytracing_descriptor_set_layout_.emplace_back(device, layout_info);
+        }
+        {
+            // set = 2
+            constexpr auto kLayoutBindings = std::to_array({
+                // geometry
+                VkDescriptorSetLayoutBinding{
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags =
+                        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
                 },
             });
             const auto layout_info = VkDescriptorSetLayoutCreateInfo{
@@ -183,6 +202,11 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model,
             },
+            // geometry
+            VkDescriptorPoolSize{
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
+            },
         });
         const auto pool_info = VkDescriptorPoolCreateInfo{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -216,8 +240,25 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
 
         // update descriptor sets
         spdlog::debug("update descriptor sets");
+        // aggregate image view
+        const auto get_image_view = [&](const auto texture) -> VkImageView {
+            if (texture == nullptr) {
+                return VK_NULL_HANDLE;
+            }
+            return texture->GetImageView();
+        };
+        auto base_color_image_infos = std::vector<VkDescriptorImageInfo>();
+        base_color_image_infos.reserve(scene.GetModels().size());
+        for (const auto& model : scene.GetModels()) {
+            const auto base_color_image_view = get_image_view(model.GetBaseColorTexture());
+            base_color_image_infos.emplace_back(VkDescriptorImageInfo{
+                .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
+                .imageView = base_color_image_view,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            });
+        }
+
         for (auto frame_i = 0; frame_i < kMaxFramesInFlight; frame_i++) {
-            const auto& model = scene.GetModels().at(0);
             const auto tlas_info = VkWriteDescriptorSetAccelerationStructureKHR{
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
                 .accelerationStructureCount = 1,
@@ -234,18 +275,12 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
 
-            const auto get_image_view = [&](const auto texture) -> VkImageView {
-                if (texture == nullptr) {
-                    return VK_NULL_HANDLE;
-                }
-                return texture->GetImageView();
+            const auto geometry_buffer_info = VkDescriptorBufferInfo{
+                .buffer = geometry_node_buffer_->GetVkBuffer(),
+                .offset = 0,
+                .range = geometry_node_buffer_->GetSize(),
             };
-            const auto base_color_image_view = get_image_view(model.GetBaseColorTexture());
-            const auto base_color_image_info = VkDescriptorImageInfo{
-                .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
-                .imageView = base_color_image_view,
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            };
+            spdlog::debug("geometry buffer size: {}", sizeof(GeometryNode));
 
             const auto descriptor_write = std::to_array(
                 {VkWriteDescriptorSet{
@@ -280,9 +315,18 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                      .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
                      .dstBinding = 1,
                      .dstArrayElement = 0,
-                     .descriptorCount = 1,
+                     .descriptorCount = static_cast<uint32_t>(base_color_image_infos.size()),
                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                     .pImageInfo = &base_color_image_info,
+                     .pImageInfo = base_color_image_infos.data(),
+                 },
+                 VkWriteDescriptorSet{
+                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(2),
+                     .dstBinding = 0,
+                     .dstArrayElement = 0,
+                     .descriptorCount = 1,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                     .pBufferInfo = &geometry_buffer_info,
                  }});
             vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptor_write.size()),
                                    descriptor_write.data(), 0, nullptr);
@@ -294,7 +338,7 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
         constexpr auto kPushConstantRanges = std::to_array({VkPushConstantRange{
             .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
             .offset = 0,
-            .size = sizeof(uint64_t) * 2,
+            .size = sizeof(uint32_t),
         }});
         raytracing_pipeline_layout_.reserve(kMaxFramesInFlight);
         for (auto i = 0; i < kMaxFramesInFlight; i++) {
@@ -436,21 +480,10 @@ void DrawRaytracing::RecordCommandBuffer(const uint32_t image_idx,
         static_cast<uint32_t>(raytracing_descriptor_sets_.at(image_idx).GetSize()),
         raytracing_descriptor_sets_.at(image_idx).GetVkDescriptorSetPtr(), 0, 0);
 
-    struct BufferReferences {
-        uint64_t vertices;
-        uint64_t indices;
-    };
-
-    // TODO: multiple vertex/instance
-    const auto buffer_references = BufferReferences{
-        .vertices = GetBufferDeviceAddress(device_, vertex_buffer_->GetVkBuffer()),
-        .indices = GetBufferDeviceAddress(device_, index_buffer_->GetVkBuffer()),
-    };
-
     vkCmdPushConstants(command_buffer,
                        raytracing_pipeline_layout_.at(image_idx).GetVkPipelineLayout(),
                        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR, 0,
-                       sizeof(uint64_t) * 2, &buffer_references);
+                       sizeof(uint32_t), &mode_);
 
     vkCmdTraceRaysKHR(command_buffer, &raygen_shader_sbt_entry, &miss_shader_sbt_entry,
                       &hit_shader_sbt_entry, &callable_shader_sbt_entry,
@@ -474,15 +507,17 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
 
     const auto num_models = scene_.GetModels().size();
     bottom_level_as_.reserve(num_models);
-    for (const auto& model : scene_.GetModels()) {
+    vertex_buffer_.reserve(num_models);
+    index_buffer_.reserve(num_models);
+    transform_buffer_.reserve(num_models);
+    geometry_nodes_.reserve(num_models);
+    for (auto model_i = 0; const auto& model : scene_.GetModels()) {
         const auto& vertices = model.GetVertexBuffers().at(0).GetVertices();
         const auto& indices = model.GetIndexBuffers().at(0).GetIndices();
 
-        // Create buffers
-        // For the sake of simplicity we won't stage the vertex data to the GPU memory
         // Vertex buffer
         spdlog::debug("create vertex buffer");
-        vertex_buffer_.emplace(
+        vertex_buffer_.emplace_back(
             device, physical_device,
             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
@@ -491,7 +526,7 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
 
         // Index buffer
         spdlog::debug("create index buffer");
-        index_buffer_.emplace(
+        index_buffer_.emplace_back(
             device, physical_device,
             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
@@ -500,7 +535,7 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
 
         // Transform buffer
         spdlog::debug("create transform buffer");
-        transform_buffer_.emplace(
+        transform_buffer_.emplace_back(
             device, physical_device,
             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
@@ -522,7 +557,7 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                             .vertexData =
                                 {
                                     .deviceAddress = GetBufferDeviceAddress(
-                                        device, vertex_buffer_->GetVkBuffer()),
+                                        device, vertex_buffer_.back().GetVkBuffer()),
                                 },
                             .vertexStride = sizeof(Vertex),
                             .maxVertex = static_cast<uint32_t>(vertices.size() - 1),
@@ -532,15 +567,24 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                             .indexData =
                                 {
                                     .deviceAddress = GetBufferDeviceAddress(
-                                        device, index_buffer_->GetVkBuffer()),
+                                        device, index_buffer_.back().GetVkBuffer()),
                                 },
                             .transformData =
                                 {
                                     .deviceAddress = GetBufferDeviceAddress(
-                                        device, transform_buffer_->GetVkBuffer()),
+                                        device, transform_buffer_.back().GetVkBuffer()),
                                 }},
                 },
             .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
+        });
+
+        geometry_nodes_.emplace_back(GeometryNode{
+            .vertex_buffer_device_address =
+                GetBufferDeviceAddress(device, vertex_buffer_.back().GetVkBuffer()),
+            .index_buffer_device_address =
+                GetBufferDeviceAddress(device, index_buffer_.back().GetVkBuffer()),
+            .texture_index_base_color =
+                model.GetBaseColorTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
         });
 
         // Get size info
@@ -616,7 +660,17 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
         };
         bottom_level_as_.back().SetDeviceAddress(
             vkGetAccelerationStructureDeviceAddressKHR(device, &acceleration_device_address_info));
+
+        model_i++;
     }
+
+    geometry_node_buffer_.emplace(
+        device, physical_device,
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        static_cast<uint32_t>(geometry_nodes_.size()) * sizeof(GeometryNode),
+        geometry_nodes_.data());
 }
 
 void DrawRaytracing::CreateTopLevelAS(const VkDevice device, const VkPhysicalDevice physical_device,
