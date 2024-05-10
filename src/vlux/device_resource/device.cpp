@@ -7,20 +7,13 @@
 
 namespace vlux {
 namespace {
-constexpr auto kDeviceExtensions = std::to_array<const char*>({
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
-    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-    VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
-    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-    VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-    VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-    VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-});
+constexpr auto kDeviceExtensions = std::to_array<const char*>(
+    {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+     VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+     VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+     VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+     VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME});
 }
 
 bool CheckDeviceExtensionSupport(VkPhysicalDevice physical_device) {
@@ -78,9 +71,15 @@ Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surfac
         return queue_create_infos;
     }();
 
+    auto scalar_block_layout_features = VkPhysicalDeviceScalarBlockLayoutFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES,
+        .pNext = nullptr,
+        .scalarBlockLayout = VK_TRUE,
+    };
+
     auto syncronization_2_features = VkPhysicalDeviceSynchronization2Features{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .pNext = nullptr,
+        .pNext = &scalar_block_layout_features,
         .synchronization2 = VK_TRUE,
     };
 
@@ -124,6 +123,7 @@ Device::Device(const VkPhysicalDevice physical_device, const VkSurfaceKHR surfac
                 .robustBufferAccess = VK_TRUE,
                 .independentBlend = VK_TRUE,
                 .samplerAnisotropy = VK_TRUE,
+                .shaderInt64 = VK_TRUE,
             },
     };
 

@@ -10,7 +10,7 @@ struct CameraMatrixParams {
 layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
 layout(set = 0, binding = 1) uniform camera_matrix_ubo { CameraMatrixParams cam; };
 
-layout(set = 1, binding = 0, rgba8) uniform image2D image;
+layout(set = 1, binding = 0, rgba8) uniform image2D result;
 
 layout(location = 0) rayPayloadEXT vec3 hit_value;
 
@@ -28,8 +28,7 @@ void main() {
 
     hit_value = vec3(0.0);
 
-    traceRayEXT(tlas, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax,
-                0);
+    traceRayEXT(tlas, gl_RayFlagsNoneEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hit_value, 0.0));
+    imageStore(result, ivec2(gl_LaunchIDEXT.xy), vec4(hit_value, 0.0));
 }

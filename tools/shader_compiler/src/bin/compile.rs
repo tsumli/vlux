@@ -131,7 +131,7 @@ fn compile_path(
 fn compile() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    let extensions = vec!["vert", "frag", "comp", "rchit", "rmiss", "rgen"];
+    let extensions = vec!["vert", "frag", "comp", "rchit", "rmiss", "rgen", "rahit"];
 
     if args.all && args.output_root.exists() {
         std::fs::remove_dir_all(&args.output_root)?;
