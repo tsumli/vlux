@@ -149,6 +149,15 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
                     .pImmutableSamplers = nullptr,
                 },
+                // normal
+                VkDescriptorSetLayoutBinding{
+                    .binding = 2,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .descriptorCount = static_cast<uint32_t>(scene_.GetModels().size()),
+                    .stageFlags =
+                        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+                    .pImmutableSamplers = nullptr,
+                },
             });
             const auto layout_info = VkDescriptorSetLayoutCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -197,10 +206,10 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight),
             },
-            // color
+            // color + normal
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model,
+                .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 2,
             },
             // geometry
             VkDescriptorPoolSize{
@@ -247,13 +256,27 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
             }
             return texture->GetImageView();
         };
+
+        // base color
         auto base_color_image_infos = std::vector<VkDescriptorImageInfo>();
         base_color_image_infos.reserve(scene.GetModels().size());
+
+        // normal
+        auto normal_image_infos = std::vector<VkDescriptorImageInfo>();
+        normal_image_infos.reserve(scene.GetModels().size());
+
         for (const auto& model : scene.GetModels()) {
             const auto base_color_image_view = get_image_view(model.GetBaseColorTexture());
             base_color_image_infos.emplace_back(VkDescriptorImageInfo{
                 .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
                 .imageView = base_color_image_view,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            });
+
+            const auto normal_image_view = get_image_view(model.GetNormalTexture());
+            normal_image_infos.emplace_back(VkDescriptorImageInfo{
+                .sampler = texture_samplers_.at(TextureSamplerType::kColor)->GetSampler(),
+                .imageView = normal_image_view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             });
         }
@@ -321,6 +344,15 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                  },
                  VkWriteDescriptorSet{
                      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(1),
+                     .dstBinding = 2,
+                     .dstArrayElement = 0,
+                     .descriptorCount = static_cast<uint32_t>(normal_image_infos.size()),
+                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                     .pImageInfo = normal_image_infos.data(),
+                 },
+                 VkWriteDescriptorSet{
+                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                      .dstSet = raytracing_descriptor_sets_.at(frame_i).GetVkDescriptorSet(2),
                      .dstBinding = 0,
                      .dstArrayElement = 0,
@@ -336,7 +368,8 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
     spdlog::debug("create pipeline layout");
     [&]() {
         constexpr auto kPushConstantRanges = std::to_array({VkPushConstantRange{
-            .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+            .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR |
+                          VK_SHADER_STAGE_RAYGEN_BIT_KHR,
             .offset = 0,
             .size = sizeof(uint32_t),
         }});
@@ -585,6 +618,8 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                 GetBufferDeviceAddress(device, index_buffer_.back().GetVkBuffer()),
             .texture_index_base_color =
                 model.GetBaseColorTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
+            .texture_index_normal =
+                model.GetNormalTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
         });
 
         // Get size info

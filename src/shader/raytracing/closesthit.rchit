@@ -10,34 +10,47 @@ layout(location = 0) rayPayloadInEXT vec3 hit_value;
 hitAttributeEXT vec2 attribs;
 
 layout(set = 1, binding = 1) uniform sampler2D base_colors[];
-
-struct ModePushConstants {
-    uint mode;
-};
-layout(push_constant) uniform push_mode { ModePushConstants mode; };
+layout(set = 1, binding = 2) uniform sampler2D normals[];
 
 #include "bufferreferences.glsl"
 #include "geometry_node.glsl"
 #include "geometrytypes.glsl"
+#include "mode_push_constant.glsl"
 
 void main() {
     // 16-bit
     Triangle tri = UnpackTriangle(gl_PrimitiveID);
     GeometryNode geometry_node = geometry_nodes.nodes[gl_InstanceID];
+
+    const vec3 base_color =
+        texture(base_colors[nonuniformEXT(geometry_node.texture_index_base_color)], tri.uv).rgb;
+    const vec3 normal =
+        texture(normals[nonuniformEXT(geometry_node.texture_index_normal)], tri.uv).rgb;
+
     switch (mode.mode) {
         case 0: {
-            const vec3 base_color =
-                texture(base_colors[nonuniformEXT(geometry_node.texture_index_base_color)], tri.uv)
-                    .rgb;
             hit_value = base_color;
             break;
         }
         case 1: {
-            hit_value = tri.normal;
+            // disable subpixel jittering
+            hit_value = base_color;
             break;
         }
         case 2: {
             hit_value.xy = tri.uv;
+            break;
+        }
+        case 3: {
+            hit_value = normal;
+            break;
+        }
+        case 4: {
+            hit_value = tri.normal;
+            break;
+        }
+        case 5: {
+            hit_value = tri.pos;
             break;
         }
         default: {

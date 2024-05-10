@@ -7,6 +7,7 @@ struct Vertex {
 
 struct Triangle {
     Vertex vertices[3];
+    vec3 pos;
     vec3 normal;
     vec2 uv;
     vec4 tangent;
@@ -36,6 +37,9 @@ Triangle UnpackTriangle(const uint primitive_index) {
     }
     // Calculate values at barycentric coordinates
     vec3 barycentric_coords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
+    tri.pos = tri.vertices[0].pos * barycentric_coords.x +
+              tri.vertices[1].pos * barycentric_coords.y +
+              tri.vertices[2].pos * barycentric_coords.z;
     tri.normal = tri.vertices[0].normal * barycentric_coords.x +
                  tri.vertices[1].normal * barycentric_coords.y +
                  tri.vertices[2].normal * barycentric_coords.z;
