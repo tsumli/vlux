@@ -76,8 +76,9 @@ void main() {
     normal_ts = normalize(normal_ts * 2.0f - 1.0f);
 
     const vec3 normal_ws = normalize(mat3x3(transform.world) * tri.normal);
-    const vec3 tangent_ws = normalize(mat3x3(transform.world) * normalize(tri.tangent.xyz));
-    const vec3 bitangent_ws = normalize(cross(normal_ws, tangent_ws)) * tri.tangent.w;
+    vec3 tangent = vec3(1, 0, 0);
+    vec3 tangent_ws = normalize(tangent - dot(tangent, tri.normal) * tri.normal);
+    vec3 bitangent_ws = cross(tangent_ws, normal_ws);
     const mat3x3 tbn = mat3x3(tangent_ws, bitangent_ws, normal_ws);
     const vec3 normal = tbn * normal_ts;
 
