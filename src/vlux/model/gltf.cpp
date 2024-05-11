@@ -1,7 +1,5 @@
 #include "gltf.h"
 
-#include <glm/ext/quaternion_geometric.hpp>
-
 #include "common/image.h"
 
 namespace vlux {
@@ -11,7 +9,10 @@ namespace {
 // TODO: This function is not working correctly
 std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
                                            const std::vector<Index>& indices) {
-    auto tangents = std::vector<glm::vec4>(vertices.size());
+    auto tangents = std::vector<glm::vec3>(vertices.size(), glm::vec3(0.0f));
+    auto bitangents = std::vector<glm::vec3>(vertices.size(), glm::vec3(0.0f));
+    auto counts = std::vector<int>(vertices.size(), 0);
+
     for (size_t i = 0; i < vertices.size(); i += 3) {
         auto& v0 = vertices[indices[i]];
         auto& v1 = vertices[indices[i + 1]];
@@ -31,16 +32,38 @@ std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
         tangent = glm::normalize(tangent);
         bitangent = glm::normalize(bitangent);
 
-        // Compute the handedness (whether the bitangent needs to be flipped)
-        const auto handedness =
-            (glm::dot(glm::cross(v0.normal, tangent), bitangent) < 0.0f) ? 1.0f : -1.0f;
+        tangents[indices[i]] += tangent;
+        tangents[indices[i + 1]] += tangent;
+        tangents[indices[i + 2]] += tangent;
 
-        // Store the tangent and its handedness in the vertex
-        tangents[indices[i]] = glm::vec4(tangent, handedness);
-        tangents[indices[i + 1]] = glm::vec4(tangent, handedness);
-        tangents[indices[i + 2]] = glm::vec4(tangent, handedness);
+        bitangents[indices[i]] += bitangent;
+        bitangents[indices[i + 1]] += bitangent;
+        bitangents[indices[i + 2]] += bitangent;
+
+        counts[indices[i]] += 1;
+        counts[indices[i + 1]] += 1;
+        counts[indices[i + 2]] += 1;
     }
-    return tangents;
+
+    auto tangent_handedness = std::vector<glm::vec4>(vertices.size());
+    // Average the tangents
+    for (size_t i = 0; i < tangents.size(); ++i) {
+        if (counts[i] > 0) {
+            tangents[i] /= static_cast<float>(counts[i]);
+            tangents[i] = glm::normalize(tangents[i]);
+
+            bitangents[i] /= static_cast<float>(counts[i]);
+            bitangents[i] = glm::normalize(bitangents[i]);
+
+            const auto handedness =
+                (glm::dot(glm::cross(vertices[i].normal, tangents[i]), bitangents[i]) < 0.0f)
+                    ? 1.0f
+                    : -1.0f;
+
+            tangent_handedness[i] = glm::vec4(tangents[i], handedness);
+        }
+    }
+    return tangent_handedness;
 }
 }  // namespace
 
@@ -65,6 +88,15 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         }
     }();
 
+    // Create rotation matrices
+    glm::mat4 rot_yaw =
+        glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 rot_pitch =
+        glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::mat4 rot_roll =
+        glm::rotate(glm::mat4(1.0f), glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+    const auto rotation_matrix = rot_yaw * rot_pitch * rot_roll;
+
     // Vertices
     auto vertices_size = 0uz;
     auto vertices = std::vector<Vertex>();
@@ -82,15 +114,6 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         std::mt19937 gen(rd());
         std::uniform_real_distribution<float> dis(0.0, 1.0);
 
-        // Create rotation matrices
-        glm::mat4 rot_yaw =
-            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 rot_pitch =
-            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), glm::vec3(1.0f, 0.0f, 0.0f));
-        glm::mat4 rot_roll =
-            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-        const auto rotation_matrix = rot_yaw * rot_pitch * rot_roll;
         for (size_t i = 0; i < vertices_size; ++i) {
             vertices[i].pos = {pos[i * 3 + 0], pos[i * 3 + 1], pos[i * 3 + 2]};
 
@@ -125,6 +148,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         assert(vertices_size == accessor.count && "count mismatched: `NORMAL`");
         for (size_t i = 0; i < vertices_size; ++i) {
             vertices[i].normal = {normal[i * 3 + 0], normal[i * 3 + 1], normal[i * 3 + 2]};
+            vertices[i].normal = glm::vec3(rotation_matrix * glm::vec4(vertices[i].normal, 1.0f));
         }
     }();
     [&]() {
