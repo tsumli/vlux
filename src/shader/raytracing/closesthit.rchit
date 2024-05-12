@@ -98,8 +98,8 @@ void main() {
     const mat3x3 tbn = mat3x3(tangent_ws, bitangent_ws, normal_ws);
     vec3 normal = tbn * normal_ts;
 
-    const float metallic = metallic_roughness.r;
     const float roughness = metallic_roughness.g;
+    const float metallic = metallic_roughness.b;
 
     const float dist = length(light.pos.xyz - tri.pos.xyz);
     const float attenuation = 3.0 / (1.0 + 0.07 * dist + 0.017 * dist * dist) * light.range;
@@ -149,6 +149,10 @@ void main() {
         }
         case 8: {
             hit_value = emissive;
+            break;
+        }
+        case 9: {
+            hit_value = tangent_ws;
             break;
         }
         default: {
