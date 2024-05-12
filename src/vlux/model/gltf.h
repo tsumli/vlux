@@ -25,7 +25,7 @@ struct GltfObject {
     std::shared_ptr<Texture<uint8_t>> normal_texture;
     std::shared_ptr<Texture<uint8_t>> occlusion_texture;
     std::shared_ptr<Texture<uint8_t>> emissive_texture;
-    std::shared_ptr<Texture<uint8_t>> metallic_roughness_texture;
+    std::shared_ptr<Texture<uint8_t>> occlusion_roughness_metallic_texture;
 };
 
 /**

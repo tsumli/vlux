@@ -141,7 +141,7 @@ void App::CreateScene() {
                     gltf_objects.roughness_factor, std::move(gltf_objects.base_color_texture),
                     std::move(gltf_objects.normal_texture),
                     std::move(gltf_objects.emissive_texture),
-                    std::move(gltf_objects.metallic_roughness_texture));
+                    std::move(gltf_objects.occlusion_roughness_metallic_texture));
                 models.emplace_back(std::move(model));
             }
         }

@@ -183,7 +183,7 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
                     .pImmutableSamplers = nullptr,
                 },
-                // metallic roughness
+                // occlusion roughness metallic
                 VkDescriptorSetLayoutBinding{
                     .binding = 4,
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -240,7 +240,7 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * 3,
             },
-            // color + normal + emissive + metallic roughness
+            // color + normal + emissive + occlusion roughness metallic
             VkDescriptorPoolSize{
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight) * num_model * 4,
@@ -303,9 +303,9 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
         auto emissive_image_infos = std::vector<VkDescriptorImageInfo>();
         emissive_image_infos.reserve(scene.GetModels().size());
 
-        // metallic roughness
-        auto metallic_roughness_image_infos = std::vector<VkDescriptorImageInfo>();
-        metallic_roughness_image_infos.reserve(scene.GetModels().size());
+        // occlusion roughness metallic
+        auto occlusion_roughness_metallic_image_infos = std::vector<VkDescriptorImageInfo>();
+        occlusion_roughness_metallic_image_infos.reserve(scene.GetModels().size());
 
         for (const auto& model : scene.GetModels()) {
             const auto base_color_image_view = get_image_view(model.GetBaseColorTexture());
@@ -329,12 +329,12 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             });
 
-            const auto metallic_roughness_image_view =
+            const auto occlusion_roughness_metallic_image_view =
                 get_image_view(model.GetMetallicRoughnessTexture());
-            metallic_roughness_image_infos.emplace_back(VkDescriptorImageInfo{
-                .sampler =
-                    texture_samplers_.at(TextureSamplerType::kMetallicRoughness)->GetSampler(),
-                .imageView = metallic_roughness_image_view,
+            occlusion_roughness_metallic_image_infos.emplace_back(VkDescriptorImageInfo{
+                .sampler = texture_samplers_.at(TextureSamplerType::kOcclusionRoughnessMetallic)
+                               ->GetSampler(),
+                .imageView = occlusion_roughness_metallic_image_view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             });
         }
@@ -451,9 +451,9 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                      .dstBinding = 4,
                      .dstArrayElement = 0,
                      .descriptorCount =
-                         static_cast<uint32_t>(metallic_roughness_image_infos.size()),
+                         static_cast<uint32_t>(occlusion_roughness_metallic_image_infos.size()),
                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                     .pImageInfo = metallic_roughness_image_infos.data(),
+                     .pImageInfo = occlusion_roughness_metallic_image_infos.data(),
                  },
                  VkWriteDescriptorSet{
                      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -726,7 +726,7 @@ void DrawRaytracing::CreateBottomLevelAS(const VkDevice device,
                 model.GetNormalTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
             .texture_index_emissive =
                 model.GetEmissiveTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
-            .texture_index_metallic_roughness =
+            .texture_index_occlusion_roughness_metallic =
                 model.GetMetallicRoughnessTexture() == nullptr ? -1 : static_cast<int32_t>(model_i),
         });
 

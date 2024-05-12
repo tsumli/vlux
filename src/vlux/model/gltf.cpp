@@ -253,7 +253,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         .normal_texture = normal_texture,
         .occlusion_texture = occlusion_texture,
         .emissive_texture = emmisive_texture,
-        .metallic_roughness_texture = metallic_roughness_texture,
+        .occlusion_roughness_metallic_texture = metallic_roughness_texture,
     };
 }
 

@@ -27,7 +27,7 @@ layout(set = 0, binding = 3) uniform ubo_transform { TransformParams transform; 
 layout(set = 1, binding = 1) uniform sampler2D base_colors[];
 layout(set = 1, binding = 2) uniform sampler2D normals[];
 layout(set = 1, binding = 3) uniform sampler2D emissives[];
-layout(set = 1, binding = 4) uniform sampler2D metallic_roughnesses[];
+layout(set = 1, binding = 4) uniform sampler2D occlusion_roughness_metallics[];
 
 #include "bufferreferences.glsl"
 #include "geometry_node.glsl"
@@ -83,23 +83,23 @@ void main() {
             texture(emissives[nonuniformEXT(geometry_node.texture_index_emissive)], tri.uv).rgb;
     }
 
-    vec4 metallic_roughness = vec4(0.3, 0.3, 0.0, 0.0);
-    if (geometry_node.texture_index_metallic_roughness != -1) {
-        metallic_roughness = texture(
-            metallic_roughnesses[nonuniformEXT(geometry_node.texture_index_metallic_roughness)],
-            tri.uv);
+    vec4 occlusion_roughness_metallic = vec4(0.3, 0.3, 0.0, 0.0);
+    if (geometry_node.texture_index_occlusion_roughness_metallic != -1) {
+        occlusion_roughness_metallic =
+            texture(occlusion_roughness_metallics[nonuniformEXT(
+                        geometry_node.texture_index_occlusion_roughness_metallic)],
+                    tri.uv);
     }
 
     const vec3 normal_ws = normalize(mat3x3(transform.world) * tri.normal);
     const vec3 tangent_ws = normalize(mat3x3(transform.world) * normalize(tri.tangent.xyz));
     const vec3 bitangent_ws = normalize(cross(normal_ws, tangent_ws)) * tri.tangent.w;
-    // const vec3 tangent_ws = normalize(tangent - dot(tangent, normal_ws) * normal_ws);
-    // const vec3 bitangent_ws = cross(normal_ws, tangent_ws);
     const mat3x3 tbn = mat3x3(tangent_ws, bitangent_ws, normal_ws);
     vec3 normal = tbn * normal_ts;
 
-    const float roughness = metallic_roughness.g;
-    const float metallic = metallic_roughness.b;
+    const float occlusion = occlusion_roughness_metallic.r;
+    const float roughness = occlusion_roughness_metallic.g;
+    const float metallic = occlusion_roughness_metallic.b;
 
     const float dist = length(light.pos.xyz - tri.pos.xyz);
     const float attenuation = 3.0 / (1.0 + 0.07 * dist + 0.017 * dist * dist) * light.range;

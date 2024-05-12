@@ -87,7 +87,13 @@ class DrawRasterize final : public DrawStrategy {
     };
     std::unordered_map<RenderTargetType, std::optional<ImageBuffer>> render_targets_;
 
-    enum class TextureSamplerType { kColor, kNormal, kEmissive, kMetallicRoughness, kCount };
+    enum class TextureSamplerType {
+        kColor,
+        kNormal,
+        kEmissive,
+        kOcclusionRoughnessMetallic,
+        kCount
+    };
     std::unordered_map<TextureSamplerType, std::optional<TextureSampler>> texture_samplers_;
 
     // mode
