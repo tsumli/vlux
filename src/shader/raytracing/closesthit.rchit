@@ -6,7 +6,6 @@
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
-layout(location = 0) rayPayloadInEXT vec3 hit_value;
 layout(location = 2) rayPayloadEXT bool shadowed;
 
 hitAttributeEXT vec2 attribs;
@@ -36,6 +35,9 @@ layout(set = 1, binding = 4) uniform sampler2D occlusion_roughness_metallics[];
 #include "geometry_node.glsl"
 #include "geometrytypes.glsl"
 #include "mode_push_constant.glsl"
+#include "ray_payload.glsl"
+
+layout(location = 0) rayPayloadInEXT RayPayload ray_payload;
 
 const float PI = 3.14159265359f;
 vec3 CookTorranceBRDF(in const vec3 N, in const vec3 V, in const vec3 L, in const vec3 albedo,
@@ -114,7 +116,10 @@ void main() {
                          metallic) *
         light.color.xyz * attenuation;
 
-    const vec3 final_color = clamp(cook_torrance_brdf, 0.0, 1.0) + emissive;
+    ray_payload.color *= clamp(cook_torrance_brdf, 0.0, 1.0) + emissive;
+    ray_payload.dist = gl_RayTmaxEXT;
+    ray_payload.normal = normal_ws;
+    ray_payload.reflector = 1.0;
 
     // Shadow casting
     float tmin = 0.001;
@@ -129,60 +134,55 @@ void main() {
                     gl_RayFlagsSkipClosestHitShaderEXT,
                 0xFF, 0, 0, 1, origin, tmin, normalize(light.pos.xyz - tri.pos.xyz), tmax, 2);
 
+    if (shadowed) {
+        ray_payload.color *= 0.3;
+    }
+
     switch (mode.mode) {
         case 0: {
-            hit_value = final_color;
-            if (shadowed) {
-                hit_value *= 0.3;
-            }
             break;
         }
         case 1: {
             // disable subpixel jittering
-            hit_value = final_color;
-            if (shadowed) {
-                hit_value *= 0.3;
-            }
             break;
         }
         case 2: {
-            hit_value.xy = tri.uv;
+            ray_payload.color.xy = tri.uv;
             break;
         }
         case 3: {
-            hit_value = normal;
+            ray_payload.color = normal;
             break;
         }
         case 4: {
-            hit_value = tri.normal;
+            ray_payload.color = tri.normal;
             break;
         }
         case 5: {
-            hit_value = tri.pos;
+            ray_payload.color = tri.pos;
             break;
         }
         case 6: {
-            hit_value = base_color;
+            ray_payload.color = base_color;
             break;
         }
         case 7: {
-            hit_value = vec3(metallic, roughness, 0.0);
+            ray_payload.color = vec3(metallic, roughness, 0.0);
             break;
         }
         case 8: {
-            hit_value = emissive;
+            ray_payload.color = emissive;
             break;
         }
         case 9: {
-            hit_value = tangent_ws;
+            ray_payload.color = tangent_ws;
             break;
         }
         case 10: {
-            hit_value = final_color;
             break;
         }
         default: {
-            hit_value = vec3(0.0, 0.0, 0.0);
+            ray_payload.color = vec3(0.0, 0.0, 0.0);
         }
     }
 }

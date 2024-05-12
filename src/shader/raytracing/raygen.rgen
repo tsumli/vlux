@@ -1,5 +1,5 @@
 #version 460
-#extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_ray_tracing : require
 #extension GL_ARB_shading_language_include : require
 #extension GL_EXT_shader_realtime_clock : require
 #extension GL_GOOGLE_include_directive : require
@@ -14,11 +14,15 @@ layout(set = 0, binding = 1) uniform camera_matrix_ubo { CameraMatrixParams cam;
 
 layout(set = 1, binding = 0, rgba8) uniform image2D result;
 
-layout(location = 0) rayPayloadEXT vec3 hit_value;
-layout(location = 3) rayPayloadEXT uint payload_seed;
-
 #include "mode_push_constant.glsl"
 #include "random.glsl"
+#include "ray_payload.glsl"
+
+layout(location = 0) rayPayloadEXT RayPayload ray_payload;
+layout(location = 3) rayPayloadEXT uint payload_seed;
+
+// Max. number of recursion is passed via a specialization constant
+layout(constant_id = 0) const int kMaxRecursion = 0;
 
 void main() {
     uint seed =
@@ -33,22 +37,37 @@ void main() {
     const vec2 uv = pixel_center / vec2(gl_LaunchSizeEXT.xy);
     const vec2 d = uv * 2.0 - 1.0;
 
-    const vec4 origin = cam.view_inv * vec4(0, 0, 0, 1);
+    vec4 origin = cam.view_inv * vec4(0, 0, 0, 1);
     const vec4 target = cam.proj_inv * vec4(d.x, d.y, 1, 1);
-    const vec4 direction = cam.view_inv * vec4(normalize(target.xyz), 0);
+    vec4 direction = cam.view_inv * vec4(normalize(target.xyz), 0);
 
     const float tmin = 0.001;
     const float tmax = 10000.0;
 
     const int samples = 1;
     vec3 result_color = vec3(0);
-    hit_value = vec3(0);
+    ray_payload.color = vec3(1);
+
     for (int smpl = 0; smpl < samples; smpl++) {
-        payload_seed =
-            tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(clockRealtimeEXT()));
-        traceRayEXT(tlas, gl_RayFlagsNoneEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax,
-                    0);
-        result_color += hit_value;
+        for (int i = 0; i < kMaxRecursion; i++) {
+            payload_seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x,
+                               int(clockRealtimeEXT()));
+            traceRayEXT(tlas, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz,
+                        tmax, 0);
+
+            if (ray_payload.dist < 0.0f) {
+                result_color += ray_payload.color;
+                break;
+            } else if (ray_payload.reflector == 1.0f) {
+                const vec4 hit_pos = origin + direction * ray_payload.dist;
+                origin.xyz = hit_pos.xyz + ray_payload.normal * 0.001f;
+                direction.xyz = reflect(direction.xyz, ray_payload.normal);
+                break;
+            } else {
+                result_color += ray_payload.color;
+                break;
+            }
+        }
     }
 
     result_color = result_color / float(samples);
