@@ -7,8 +7,11 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 layout(location = 0) rayPayloadInEXT vec3 hit_value;
+layout(location = 2) rayPayloadEXT bool shadowed;
+
 hitAttributeEXT vec2 attribs;
 
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
 struct LightParams {
     vec4 pos;
     float range;
@@ -113,14 +116,33 @@ void main() {
 
     const vec3 final_color = clamp(cook_torrance_brdf, 0.0, 1.0) + emissive;
 
+    // Shadow casting
+    float tmin = 0.001;
+    float tmax = length(light.pos.xyz - tri.pos.xyz);
+    float epsilon = 0.001;
+    vec3 origin =
+        gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT + tri.normal * epsilon;
+    shadowed = true;
+    // Trace shadow ray and offset indices to match shadow hit/miss shader group indices
+    traceRayEXT(tlas,
+                gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT |
+                    gl_RayFlagsSkipClosestHitShaderEXT,
+                0xFF, 0, 0, 1, origin, tmin, normalize(light.pos.xyz - tri.pos.xyz), tmax, 2);
+
     switch (mode.mode) {
         case 0: {
             hit_value = final_color;
+            if (shadowed) {
+                hit_value *= 0.3;
+            }
             break;
         }
         case 1: {
             // disable subpixel jittering
             hit_value = final_color;
+            if (shadowed) {
+                hit_value *= 0.3;
+            }
             break;
         }
         case 2: {
@@ -155,23 +177,12 @@ void main() {
             hit_value = tangent_ws;
             break;
         }
+        case 10: {
+            hit_value = final_color;
+            break;
+        }
         default: {
             hit_value = vec3(0.0, 0.0, 0.0);
         }
     }
-
-    // // Shadow casting
-    // float tmin = 0.001;
-    // float tmax = 10000.0;
-    // float epsilon = 0.001;
-    // vec3 origin =
-    //     gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT + tri.normal * epsilon;
-    // shadowed = true;
-    // vec3 lightVector = vec3(-5.0, -2.5, -5.0);
-    // // Trace shadow ray and offset indices to match shadow hit/miss shader group indices
-    // //	traceRayEXT(topLevelAS, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT |
-    // //gl_RayFlagsSkipClosestHitShaderEXT, 0xFF, 0, 0, 1, origin, tmin, lightVector, tmax, 2);
-    // if
-    // //(shadowed) { 		hitValue *= 0.7;
-    // //	}
 }

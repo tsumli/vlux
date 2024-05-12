@@ -499,11 +499,14 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
     [&]() {
         const auto rgen_path = std::filesystem::path("raytracing/raygen.rgen.spv");
         const auto miss_path = std::filesystem::path("raytracing/miss.rmiss.spv");
+        const auto shadow_miss_path = std::filesystem::path("raytracing/shadow.rmiss.spv");
         const auto rchit_path = std::filesystem::path("raytracing/closesthit.rchit.spv");
         const auto rahit_path = std::filesystem::path("raytracing/anyhit.rahit.spv");
 
         const auto rgen_shader = Shader(rgen_path, VK_SHADER_STAGE_RAYGEN_BIT_KHR, device);
         const auto miss_shader = Shader(miss_path, VK_SHADER_STAGE_MISS_BIT_KHR, device);
+        const auto shadow_miss_shader =
+            Shader(shadow_miss_path, VK_SHADER_STAGE_MISS_BIT_KHR, device);
         const auto rchit_shader = Shader(rchit_path, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, device);
         const auto rahit_shader = Shader(rahit_path, VK_SHADER_STAGE_ANY_HIT_BIT_KHR, device);
 
@@ -535,6 +538,18 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .intersectionShader = VK_SHADER_UNUSED_KHR,
             };
             shader_groups_.emplace_back(shader_group);
+
+            // second shader for shadow
+            shader_stages.emplace_back(shadow_miss_shader.GetStageInfo());
+            const auto shadow_shader_group = VkRayTracingShaderGroupCreateInfoKHR{
+                .sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
+                .type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR,
+                .generalShader = static_cast<uint32_t>(shader_stages.size()) - 1,
+                .closestHitShader = VK_SHADER_UNUSED_KHR,
+                .anyHitShader = VK_SHADER_UNUSED_KHR,
+                .intersectionShader = VK_SHADER_UNUSED_KHR,
+            };
+            shader_groups_.emplace_back(shadow_shader_group);
         }();
 
         spdlog::debug("setup hit");
@@ -966,13 +981,13 @@ void DrawRaytracing::CreateShaderBindingTable(const VkDevice device,
 
     spdlog::debug("create miss shader binding table");
     miss_shader_binding_table_.emplace(device, physical_device, kBufferUsageFlags,
-                                       kMemoryPropertyFlags, handle_size,
+                                       kMemoryPropertyFlags, handle_size * 2,
                                        shader_handle_storage.data() + handle_size_aligned);
 
     spdlog::debug("create hit shader binding table");
     hit_shader_binding_table_.emplace(device, physical_device, kBufferUsageFlags,
                                       kMemoryPropertyFlags, handle_size,
-                                      shader_handle_storage.data() + handle_size_aligned * 2);
+                                      shader_handle_storage.data() + handle_size_aligned * 3);
 
     spdlog::debug("finish creating shader binding table");
 }
