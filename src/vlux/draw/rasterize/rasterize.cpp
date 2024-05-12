@@ -649,7 +649,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 const auto base_color_image_view = get_image_view(model.GetBaseColorTexture());
                 const auto normal_image_view = get_image_view(model.GetNormalTexture());
                 const auto emissive_image_view = get_image_view(model.GetEmissiveTexture());
-                const auto metallic_roughness_image_view =
+                const auto occlusion_roughness_metallic_image_view =
                     get_image_view(model.GetMetallicRoughnessTexture());
 
                 // color
@@ -701,10 +701,11 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                 });
 
                 // metallic roughness
-                const auto metallic_roughness_image_info = VkDescriptorImageInfo{
+                const auto occlusion_roughness_metallic_image_info = VkDescriptorImageInfo{
                     .sampler =
-                        texture_samplers_.at(TextureSamplerType::kMetallicRoughness)->GetSampler(),
-                    .imageView = metallic_roughness_image_view,
+                        texture_samplers_.at(TextureSamplerType::kOcclusionRoughnessMetallic)
+                            ->GetSampler(),
+                    .imageView = occlusion_roughness_metallic_image_view,
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 };
                 descriptor_write.emplace_back(VkWriteDescriptorSet{
@@ -714,7 +715,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .pImageInfo = &metallic_roughness_image_info,
+                    .pImageInfo = &occlusion_roughness_metallic_image_info,
                 });
 
                 // material
@@ -1033,12 +1034,12 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     render_targets_.at(RenderTargetType::kBaseColorFactor)->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
-            const auto metallic_roughness_factor_image_info = VkDescriptorImageInfo{
+            const auto occlusion_roughnes_metallic_factor_image_info = VkDescriptorImageInfo{
                 .imageView = render_targets_.at(RenderTargetType::kMetallicRoughnessFactor)
                                  ->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             };
-            const auto metallic_roughness_image_info = VkDescriptorImageInfo{
+            const auto occlusion_roughness_metallic_image_info = VkDescriptorImageInfo{
                 .imageView =
                     render_targets_.at(RenderTargetType::kMetallicRoughness)->GetVkImageView(),
                 .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -1127,7 +1128,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &metallic_roughness_factor_image_info,
+                    .pImageInfo = &occlusion_roughnes_metallic_factor_image_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1136,7 +1137,7 @@ DrawRasterize::DrawRasterize(const UniformBuffer<TransformParams>& transform_ubo
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &metallic_roughness_image_info,
+                    .pImageInfo = &occlusion_roughness_metallic_image_info,
                 },
                 VkWriteDescriptorSet{
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

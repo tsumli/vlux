@@ -11,12 +11,15 @@ std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
                                            const std::vector<Index>& indices) {
     auto tangents = std::vector<glm::vec3>(vertices.size(), glm::vec3(0.0f));
     auto bitangents = std::vector<glm::vec3>(vertices.size(), glm::vec3(0.0f));
-    auto counts = std::vector<int>(vertices.size(), 0);
 
-    for (size_t i = 0; i < vertices.size(); i += 3) {
-        auto& v0 = vertices[indices[i]];
-        auto& v1 = vertices[indices[i + 1]];
-        auto& v2 = vertices[indices[i + 2]];
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        const auto idx_0 = indices[i];
+        const auto idx_1 = indices[i + 1];
+        const auto idx_2 = indices[i + 2];
+
+        const auto& v0 = vertices[idx_0];
+        const auto& v1 = vertices[idx_1];
+        const auto& v2 = vertices[idx_2];
 
         const auto edge_1 = v1.pos - v0.pos;
         const auto edge_2 = v2.pos - v0.pos;
@@ -24,45 +27,43 @@ std::vector<glm::vec4> ComputeTangentFrame(const std::vector<Vertex>& vertices,
         const auto delta_uv_2 = v2.uv - v0.uv;
 
         const auto det = delta_uv_1.x * delta_uv_2.y - delta_uv_2.x * delta_uv_1.y;
-        if (std::fabs(det) < 1e-8f) continue;  // Skip degenerate triangles
-        glm::vec3 tangent, bitangent;
         const auto f = 1.0f / det;
-        tangent = f * (delta_uv_2.y * edge_1 - delta_uv_1.y * edge_2);
-        bitangent = f * (-delta_uv_2.x * edge_1 + delta_uv_1.x * edge_2);
+        auto tangent = f * (delta_uv_2.y * edge_1 - delta_uv_1.y * edge_2);
+        auto bitangent = f * (-delta_uv_2.x * edge_1 + delta_uv_1.x * edge_2);
         tangent = glm::normalize(tangent);
         bitangent = glm::normalize(bitangent);
 
-        tangents[indices[i]] += tangent;
-        tangents[indices[i + 1]] += tangent;
-        tangents[indices[i + 2]] += tangent;
+        tangents[idx_0] = tangent;
+        tangents[idx_1] = tangent;
+        tangents[idx_2] = tangent;
 
-        bitangents[indices[i]] += bitangent;
-        bitangents[indices[i + 1]] += bitangent;
-        bitangents[indices[i + 2]] += bitangent;
-
-        counts[indices[i]] += 1;
-        counts[indices[i + 1]] += 1;
-        counts[indices[i + 2]] += 1;
+        bitangents[idx_0] = bitangent;
+        bitangents[idx_1] = bitangent;
+        bitangents[idx_2] = bitangent;
     }
 
     auto tangent_handedness = std::vector<glm::vec4>(vertices.size());
     // Average the tangents
     for (size_t i = 0; i < tangents.size(); ++i) {
-        if (counts[i] > 0) {
-            tangents[i] /= static_cast<float>(counts[i]);
-            tangents[i] = glm::normalize(tangents[i]);
+        // tangents[i] = glm::normalize(tangents[i]);
+        // bitangents[i] = glm::normalize(bitangents[i]);
 
-            bitangents[i] /= static_cast<float>(counts[i]);
-            bitangents[i] = glm::normalize(bitangents[i]);
+        // Gram-Schmidt orthogonalize
+        const auto orthogonal_tangent = glm::normalize(
+            tangents[i] - vertices[i].normal * glm::dot(vertices[i].normal, tangents[i]));
+        const auto orthogonal_bitangent =
+            glm::normalize(glm::cross(vertices[i].normal, tangents[i]));
 
-            const auto handedness =
-                (glm::dot(glm::cross(vertices[i].normal, tangents[i]), bitangents[i]) < 0.0f)
-                    ? 1.0f
-                    : -1.0f;
+        tangents[i] = orthogonal_tangent;
+        bitangents[i] = orthogonal_bitangent;
 
-            tangent_handedness[i] = glm::vec4(tangents[i], handedness);
-        }
+        const auto handedness =
+            (glm::dot(glm::cross(vertices[i].normal, tangents[i]), bitangents[i]) < 0.0f) ? 1.0f
+                                                                                          : -1.0f;
+
+        tangent_handedness[i] = glm::vec4(tangents[i], handedness);
     }
+
     return tangent_handedness;
 }
 }  // namespace
@@ -110,9 +111,6 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
             &buffer.data[bufferView.byteOffset + accessor.byteOffset]);
         vertices_size = accessor.count;
         vertices.resize(vertices_size);
-        std::random_device rd{};
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dis(0.0, 1.0);
 
         for (size_t i = 0; i < vertices_size; ++i) {
             vertices[i].pos = {pos[i * 3 + 0], pos[i * 3 + 1], pos[i * 3 + 2]};
@@ -166,16 +164,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
             }
 
         } else {
-            auto positions = std::vector<glm::vec3>(vertices_size);
-            auto normals = std::vector<glm::vec3>(vertices_size);
-            auto uvs = std::vector<glm::vec2>(vertices_size);
-            for (size_t i = 0; i < vertices_size; i++) {
-                positions[i] = {vertices[i].pos.x, vertices[i].pos.y, vertices[i].pos.z};
-                normals[i] = vertices[i].normal;
-                uvs[i] = vertices[i].uv;
-            }
-
-            auto tangents = ComputeTangentFrame(vertices, indices);
+            const auto tangents = ComputeTangentFrame(vertices, indices);
             for (size_t i = 0; i < vertices_size; i++) {
                 vertices[i].tangent = {tangents[i].x, tangents[i].y, tangents[i].z, tangents[i].w};
             }
@@ -264,7 +253,7 @@ GltfObject LoadGltfObjects(const tinygltf::Primitive& primitive, const tinygltf:
         .normal_texture = normal_texture,
         .occlusion_texture = occlusion_texture,
         .emissive_texture = emmisive_texture,
-        .metallic_roughness_texture = metallic_roughness_texture,
+        .occlusion_roughness_metallic_texture = metallic_roughness_texture,
     };
 }
 

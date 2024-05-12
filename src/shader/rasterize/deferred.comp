@@ -35,7 +35,7 @@ layout(rgba32f, set = 1, binding = 2) uniform readonly image2D position;
 layout(rgba32f, set = 1, binding = 3) uniform readonly image2D emissive;
 layout(rgba32f, set = 1, binding = 4) uniform readonly image2D base_color_factor;
 layout(rgba32f, set = 1, binding = 5) uniform readonly image2D metallic_roughness_factor;
-layout(rgba32f, set = 1, binding = 6) uniform readonly image2D metallic_roughness;
+layout(rgba32f, set = 1, binding = 6) uniform readonly image2D occlusion_roughness_metallic;
 layout(r32f, set = 1, binding = 7) uniform image2D depth;
 layout(rgba32f, set = 1, binding = 8) uniform writeonly image2D result;
 
@@ -104,10 +104,10 @@ void main() {
     const float pixel_metallic_factor = pixel_metallic_roughness_factor.x;
     const float pixel_roughness_factor = pixel_metallic_roughness_factor.y;
 
-    const vec4 pixel_metallic_roughness =
-        imageLoad(metallic_roughness, ivec2(gl_GlobalInvocationID.xy));
-    const float pixel_metallic = pixel_metallic_roughness.x * pixel_metallic_factor;
-    const float pixel_roughness = pixel_metallic_roughness.y * pixel_roughness_factor;
+    const vec4 pixel_occlusion_roughness_metallic =
+        imageLoad(occlusion_roughness_metallic, ivec2(gl_GlobalInvocationID.xy));
+    const float pixel_roughness = pixel_occlusion_roughness_metallic.y * pixel_roughness_factor;
+    const float pixel_metallic = pixel_occlusion_roughness_metallic.z * pixel_metallic_factor;
 
     const vec4 pixel_base_color_factor =
         imageLoad(base_color_factor, ivec2(gl_GlobalInvocationID.xy));
@@ -163,7 +163,7 @@ void main() {
             break;
         case 8:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy),
-                       vec4(pixel_metallic_roughness.xyz, 1.0f));
+                       vec4(pixel_occlusion_roughness_metallic.xyz, 1.0f));
             break;
         default:
             imageStore(result, ivec2(gl_GlobalInvocationID.xy), vec4(0.0f, 0.0f, 0.0f, 1.0f));

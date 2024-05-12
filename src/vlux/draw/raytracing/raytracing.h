@@ -25,7 +25,7 @@ struct GeometryNode {
     int32_t texture_index_base_color;
     int32_t texture_index_normal;
     int32_t texture_index_emissive;
-    int32_t texture_index_metallic_roughness;
+    int32_t texture_index_occlusion_roughness_metallic;
 };
 
 struct ModePushConstants {
@@ -109,7 +109,13 @@ class DrawRaytracing : public DrawStrategy {
     //! (kMaxFramesInFlight,)
     std::vector<RaytracingPipeline> raytracing_pipeline_;
 
-    enum class TextureSamplerType { kColor, kNormal, kEmmisive, kMetallicRoughness, kCount };
+    enum class TextureSamplerType {
+        kColor,
+        kNormal,
+        kEmmisive,
+        kOcclusionRoughnessMetallic,
+        kCount
+    };
     std::unordered_map<TextureSamplerType, std::optional<TextureSampler>> texture_samplers_;
 
     PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;

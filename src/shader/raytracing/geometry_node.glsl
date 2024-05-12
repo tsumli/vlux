@@ -4,7 +4,7 @@ struct GeometryNode {
     int texture_index_base_color;
     int texture_index_normal;
     int texture_index_emissive;
-    int texture_index_metallic_roughness;
+    int texture_index_occlusion_roughness_metallic;
 };
 layout(set = 2, binding = 0) buffer GeometryNodes { GeometryNode nodes[]; }
 geometry_nodes;
