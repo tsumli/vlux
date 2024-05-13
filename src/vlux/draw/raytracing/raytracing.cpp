@@ -513,8 +513,24 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
         auto shader_stages = std::vector<VkPipelineShaderStageCreateInfo>();
 
         spdlog::debug("setup raygen");
+        const auto specialization_map_entry = VkSpecializationMapEntry{
+            .constantID = 0,
+            .offset = 0,
+            .size = sizeof(uint32_t),
+        };
+        uint32_t max_recursion = 2;
+        auto specialization_info = VkSpecializationInfo{
+            .mapEntryCount = 1,
+            .pMapEntries = &specialization_map_entry,
+            .dataSize = sizeof(uint32_t),
+            .pData = &max_recursion,
+        };
+
         [&]() {
-            shader_stages.emplace_back(rgen_shader.GetStageInfo());
+            auto stage_info = rgen_shader.GetStageInfo();
+            stage_info.pSpecializationInfo = &specialization_info;
+
+            shader_stages.emplace_back(stage_info);
             const auto shader_group = VkRayTracingShaderGroupCreateInfoKHR{
                 .sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
                 .type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR,
@@ -576,7 +592,7 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .pStages = shader_stages.data(),
                 .groupCount = static_cast<uint32_t>(shader_groups_.size()),
                 .pGroups = shader_groups_.data(),
-                .maxPipelineRayRecursionDepth = 1,
+                .maxPipelineRayRecursionDepth = max_recursion,
                 .layout = raytracing_pipeline_layout_.at(i).GetVkPipelineLayout(),
             };
             raytracing_pipeline_.emplace_back(device, pipeline_info);
