@@ -105,6 +105,20 @@ FetchContent_MakeAvailable(Catch2)
 target_include_directories(${TEST_NAME} PUBLIC ${BUILD_LIB_DIR}/catch2/src/)
 target_link_libraries(${TEST_NAME} PUBLIC Catch2::Catch2)
 
+# NRD
+message(STATUS "Setup nrd")
+FetchContent_Declare(
+  nrd
+  GIT_REPOSITORY https://github.com/NVIDIAGameWorks/RayTracingDenoiser.git
+  GIT_TAG v4.8.0
+  SOURCE_DIR ${BUILD_LIB_DIR}/nrd
+)
+set(NRD_EMBEDS_SPIRV_SHADERS OFF)
+FetchContent_MakeAvailable(nrd)
+set(NRD_INCLUDE ${BUILD_LIB_DIR}/Include)
+target_include_directories(${LIB_NAME} PUBLIC ${NRD_INCLUDE})
+target_link_libraries(${LIB_NAME} PUBLIC nrd)
+
 # download asset
 set(ASSET_DIR ${CMAKE_CURRENT_BINARY_DIR}/assets)
 
