@@ -41,8 +41,8 @@ void main() {
     const vec4 target = cam.proj_inv * vec4(d.x, d.y, 1, 1);
     vec4 direction = cam.view_inv * vec4(normalize(target.xyz), 0);
 
-    const float tmin = 0.001;
-    const float tmax = 10000.0;
+    const float tmin = 0.01;
+    const float tmax = 1000.0;
 
     const int samples = 1;
     vec3 result_color = vec3(0);
@@ -62,7 +62,7 @@ void main() {
                 const vec4 hit_pos = origin + direction * ray_payload.dist;
                 origin.xyz = hit_pos.xyz + ray_payload.normal * 0.001f;
                 direction.xyz = reflect(direction.xyz, ray_payload.normal);
-                break;
+                result_color += ray_payload.color;
             } else {
                 result_color += ray_payload.color;
                 break;

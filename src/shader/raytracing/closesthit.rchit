@@ -119,10 +119,10 @@ void main() {
     ray_payload.color *= clamp(cook_torrance_brdf, 0.0, 1.0) + emissive;
     ray_payload.dist = gl_RayTmaxEXT;
     ray_payload.normal = normal_ws;
-    ray_payload.reflector = 1.0;
+    ray_payload.reflector = 1.0f;
 
     // Shadow casting
-    float tmin = 0.001;
+    float tmin = 0.01;
     float tmax = length(light.pos.xyz - tri.pos.xyz);
     float epsilon = 0.001;
     vec3 origin =
@@ -167,7 +167,7 @@ void main() {
             break;
         }
         case 7: {
-            ray_payload.color = vec3(metallic, roughness, 0.0);
+            ray_payload.color = vec3(metallic);
             break;
         }
         case 8: {
@@ -179,6 +179,10 @@ void main() {
             break;
         }
         case 10: {
+            break;
+        }
+        case 11: {
+            ray_payload.color = vec3(roughness);
             break;
         }
         default: {

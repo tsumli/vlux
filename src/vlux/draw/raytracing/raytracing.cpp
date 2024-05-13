@@ -518,7 +518,7 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
             .offset = 0,
             .size = sizeof(uint32_t),
         };
-        uint32_t max_recursion = 4;
+        uint32_t max_recursion = 2;
         auto specialization_info = VkSpecializationInfo{
             .mapEntryCount = 1,
             .pMapEntries = &specialization_map_entry,
@@ -592,7 +592,7 @@ DrawRaytracing::DrawRaytracing(const UniformBuffer<TransformParams>& transform_u
                 .pStages = shader_stages.data(),
                 .groupCount = static_cast<uint32_t>(shader_groups_.size()),
                 .pGroups = shader_groups_.data(),
-                .maxPipelineRayRecursionDepth = 1,
+                .maxPipelineRayRecursionDepth = max_recursion,
                 .layout = raytracing_pipeline_layout_.at(i).GetVkPipelineLayout(),
             };
             raytracing_pipeline_.emplace_back(device, pipeline_info);
