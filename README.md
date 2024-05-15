@@ -47,15 +47,15 @@ or you can just use VSCode to launch.
   - [x] CookTorranceBRDF
 - [x] Gamma correction
 - [x] Use config file
+- [x] Reflection
+- [x] Shadow
+- [x] Raytracing
 - [ ] Cubemap
 - [ ] Multi-threading
 - [ ] Screen space ambient occlusion
 - [ ] Transparent pass
-- [ ] Reflection
-- [ ] Shadow
 - [ ] LOD
 - [ ] Displacement mapping
-- [ ] Raytracing
 - [ ] Mesh shader
 - [ ] SPIRV-reflect
 - [ ] Reconstruct world position from depth in compute shader
